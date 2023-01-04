@@ -1,0 +1,8 @@
+/logs/
+/dataset/
+/.idea/
+/__pycache__/
+/Transformer_MM_Explainability/
+*.png
+*.jpg
+*.pth
