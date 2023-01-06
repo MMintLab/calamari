@@ -206,7 +206,9 @@ def energy_regularization(energy, mask = None, minmax = None, return_original = 
     else:
         mask = mask.numpy()
 
-    energy = energy.squeeze().detach().cpu().numpy()
+    ## if variable is numpy
+    if not type(energy) is np.ndarray:
+        energy = energy.squeeze().detach().cpu().numpy()
     iidx, jidx = np.where(mask != 0)
     iidx_m, jidx_m = np.where(mask == 0)
 

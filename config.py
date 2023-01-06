@@ -29,7 +29,7 @@ class Config:
         self.seed = 42
         self.len = 70 # number of training data
 
-        self.train_idx = np.arange(0,70)
+        self.train_idx = np.arange(0,20)
         self.test_idx = np.arange(140,150)
 
         # self.n_idx = self.get_negative_idxs()

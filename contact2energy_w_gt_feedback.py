@@ -14,7 +14,7 @@ import tensorflow as tf
 from utils import *
 from modules_gt import policy
 from config import Config
-from dataset import DatasetSeq_front_gt_feedback as Dataset
+from dataset import Dataset_front_gt_feedback as Dataset
 from torch.utils.data import DataLoader
 import loss
 
@@ -26,8 +26,8 @@ parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of t
 args = parser.parse_args()
 
 TXT  = "Use the sponge to clean up the dirt."
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-# torch.cuda.set_device("cuda:"+args.gpu_id)
+# os.environ["CUDA_VISIBLE_DEVICES"] = 3
+torch.cuda.set_device(int(args.gpu_id))
 
 
 class ContactEnergy():
@@ -145,9 +145,10 @@ class ContactEnergy():
             cost_hist.append(cost_reg.detach().cpu())
             vel_hist.append(vel_reg.detach().cpu())
             contact_histories_ovl.append(self.overlay_cnt_rgb(rgb, round_mask(contact.detach().cpu()).unsqueeze(3) * cost_reg_ori))
-
-        self.data_summary = self.get_data_summary()
-
+       ## summary of result
+        energy_loss_ave = energy_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
+        contact_loss_ave = contact_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
+        return contact_hist, cost_hist, vel_hist, contact_histories_ovl, energy_loss_ave, contact_loss_ave
 
     def write_tensorboard_test(self, step, contact, energy, vel, contact_ovl, eng_loss_t, cnt_loss_t):
         contact = torch.cat(contact, dim = 0).unsqueeze(3)
@@ -163,8 +164,8 @@ class ContactEnergy():
             tf.summary.image("energy_test", energy, max_outputs=len(energy), step=step)
             tf.summary.image("velocity_test", velocity, max_outputs=len(energy), step=step)
 
-            tf.summary.scalar("loss1_test", eng_loss_t.detach().cpu() , step=step)
-            tf.summary.scalar("loss0_test", cnt_loss_t.detach().cpu(), step=step)
+            tf.summary.scalar("loss1_test", eng_loss_t , step=step)
+            tf.summary.scalar("loss0_test", cnt_loss_t, step=step)
 
     def write_tensorboard(self, step, contact, energy, vel, contact_ovl):
         contact = torch.cat(contact, dim = 0).unsqueeze(3)
@@ -263,7 +264,7 @@ class ContactEnergy():
             if i % 5 == 0 or i == self.Config.epoch -1:
                 self.write_tensorboard(i, contact_histories, energy_histories, vel_histories, contact_histories_ovl)
             
-            if i % 100 == 0 or i == self.Config.epoch -1:               
+            if i % 10 == 0 or i == self.Config.epoch -1:               
                 contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t  = self._evaluate_testdataset()
                 self.write_tensorboard_test(i, contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t)
 

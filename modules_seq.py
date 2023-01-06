@@ -237,7 +237,7 @@ class policy(nn.Module):
         feat = pos_enc_simple(feat)
 
         out = self.transformer_encoder(feat) # L x dim_ft
-        contact_seq = self.transformer_decoder(out)[:, :4, :]
+        contact_seq = self.transformer_decoder(out)
         return contact_seq
 
 
