@@ -11,12 +11,12 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-from utils import *
-from modules_seq import  policy
-from config import Config
-from dataset import DatasetSeq_front
+from language4contact.utils import *
+from language4contact.modules_seq import  policy
+from config.config import Config
+from language4contact.dataset import DatasetSeq_front_feedback as Dataset
 from torch.utils.data import DataLoader
-import loss
+import language4contact.loss
 
 
 parser = ArgumentParser()
@@ -41,12 +41,12 @@ class ContactEnergy():
         self._initialize_loss(mode = 'a')
 
         ## Data-loader
-        train_dataset = DatasetSeq_front(self.Config, mode = "train")
+        train_dataset = Dataset(self.Config, mode = "train")
         self.train_dataLoader = DataLoader(dataset= train_dataset,
                          batch_size=self.Config.B, shuffle=True)
 
-        self.test_dataLoader = DataLoader(dataset=DatasetSeq_front(self.Config, mode = "test"),
-                         batch_size=self.Config.B, shuffle=False)
+        self.test_dataLoader = DataLoader(dataset=Dataset(self.Config, mode = "test"),
+                         batch_size=1, shuffle=False)
 
 
 
@@ -102,15 +102,16 @@ class ContactEnergy():
         self._save_script_log(logdir)
     
     def _save_script_log(self, logdir):
-        save_script('contact2energy_full.py', logdir)
-        save_script('modules.py', logdir)
-        save_script('utils.py', logdir)
-        save_script('loss.py', logdir)
-        save_script('config.py', logdir)
+        save_script('script/contact2seq_front_feedback.py', logdir)
+        save_script('language4contact/modules.py', logdir)
+        save_script('language4contact/utils.py', logdir)
+        save_script('language4contact/loss.py', logdir)
+        save_script('config/config.py', logdir)
 
 
     def _evaluate_testdataset(self):
         tot_tot_loss = 0
+
         self._initialize_loss(mode = 'a')
 
         contact_histories = []
@@ -118,41 +119,43 @@ class ContactEnergy():
 
         for data in self.test_dataLoader:
             l = data["idx"]
-            rgb = data['traj_rgb'][0]
+            rgb = data['traj_rgb']
+
             traj_cnt_lst = data['traj_cnt_lst'] #([B, input_length, img_w, img_h])
             _, l_inp, c_img_w, c_img_h = traj_cnt_lst.shape
 
 
             feat, seg_idx =  self.policy.input_processing(rgb, TXT)
             contact_seq = self.policy(feat, seg_idx).reshape(-1, c_img_w, c_img_h)
+            contact_seq = contact_seq[:traj_cnt_lst.shape[1], :, :]
+
             contact_histories.append( union_img( contact_seq.detach().cpu()) )
-            contact_histories_ovl.append(self.overlay_cnt_rgb(rgb, contact_seq.detach().cpu()))
+            contact_histories_ovl.append(self.overlay_cnt_rgb(rgb[0], contact_seq.detach().cpu()))
 
 
-    
             # loss
             loss0_i =  torch.norm( traj_cnt_lst.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 *l_inp )
             tot_tot_loss += copy.copy(loss0_i.detach().cpu())
+               ## summary of result
+        tot_tot_loss = tot_tot_loss / (self.test_idx[1] - self.test_idx[0] + 1)
 
         return contact_histories, contact_histories_ovl, tot_tot_loss
 
     def write_tensorboard_test(self, step, contact, contact_ovl, loss0):
-        contact = torch.stack(contact, dim = 0)
+        contact = torch.cat(contact, dim = 0)
         contact_ovl = torch.stack(contact_ovl, dim = 0)
 
         with self.file_writer.as_default():
             tf.summary.image("contact_test", contact, max_outputs=len(contact), step=step)
             tf.summary.image("contact_ovl_test", contact_ovl, max_outputs=len(contact_ovl), step=step)
-
             tf.summary.scalar("loss0_test", loss0/ len(self.Config.test_idx) , step=step)
 
     def write_tensorboard(self, step, contact, contact_ovl):
-        contact = torch.stack(contact, dim = 0)
+        contact = torch.cat(contact, dim = 0)
         contact_ovl = torch.stack(contact_ovl, dim = 0)
         with self.file_writer.as_default():
             tf.summary.image("contact", contact, max_outputs=len(contact), step=step)
             tf.summary.image("contact_ovl", contact_ovl, max_outputs=len(contact_ovl), step=step)
-
             tf.summary.scalar("loss0", self.tot_loss['loss0'].detach().cpu()/ len(self.Config.train_idx) , step=step)
 
     def _initialize_loss(self, mode = 'p'): # 'p' = partial, 'a' = all
@@ -171,6 +174,7 @@ class ContactEnergy():
         rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)[:,:,:3]
 
         uic = union_img(cnt_pred.squeeze()).numpy()
+        uic = uic.squeeze()
         iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
         rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
         return torch.tensor(rgb)
@@ -182,21 +186,23 @@ class ContactEnergy():
 
             self._initialize_loss(mode = 'a')
 
-            contact_histories = [0] * len(self.Config.train_idx) 
-            contact_histories_ovl = [0] * len(self.Config.train_idx) 
+            contact_histories = [0] * 2000 #self.train_dataLoader.__len__()
+            contact_histories_ovl = [0] * 2000 #self.train_dataLoader.__len__()
 
             tot_loss = 0
+            l_i_hist = []
 
             for data in self.train_dataLoader:
                 l = data["idx"]
-                rgb = data['traj_rgb'][0]
+                rgb = data['traj_rgb']
                 traj_cnt_lst = data['traj_cnt_lst'] #([B, input_length, img_w, img_h])
                 _, l_inp, c_img_w, c_img_h = traj_cnt_lst.shape
 
 
-
                 feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-                contact_seq = self.policy(feat, seg_idx).reshape(-1, c_img_w, c_img_h)
+                contact_seq = self.policy(feat, seg_idx)
+                contact_seq = contact_seq.reshape(len(l), -1, c_img_w, c_img_h)
+                contact_seq = contact_seq[:, :traj_cnt_lst.shape[1], :, :]
 
         
                 # loss
@@ -206,8 +212,12 @@ class ContactEnergy():
                 loss0_i.backward()
                 self.optim.step()
 
-                contact_histories[l] = union_img(contact_seq.detach().cpu())
-                contact_histories_ovl[l] = self.overlay_cnt_rgb(rgb, contact_seq.detach().cpu())
+
+                for l_ir, l_i in enumerate(l):
+                    if l_i < 2000: 
+                        contact_histories[l_i] = union_img(contact_seq[l_ir].detach().cpu())
+                        contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb[l_ir], contact_seq[l_ir].detach().cpu())
+                        l_i_hist.append(l_i)
 
                 self.tot_loss['loss0'] = self.tot_loss['loss0']  + loss0_i.detach().cpu()
                 tot_loss += loss0_i.detach().cpu()
@@ -215,7 +225,7 @@ class ContactEnergy():
                 self._initialize_loss(mode = 'p')
 
 
-
+            print( np.amax(l_i_hist))
             if i % 5 == 0 or i == self.Config.epoch -1:
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl)
             
@@ -226,5 +236,5 @@ class ContactEnergy():
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
 
-CE = ContactEnergy( log_path = 'transformer_seq2seq')
+CE = ContactEnergy( log_path = 'transformer_seq2seq_feedback')
 CE.get_energy_field()

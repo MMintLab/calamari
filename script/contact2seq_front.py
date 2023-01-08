@@ -11,10 +11,10 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-from utils import *
+from language4contact.utils import *
 from modules_seq import  policy
-from config import Config
-from dataset import Dataset, DatasetSeq
+from config.config import Config
+from dataset import DatasetSeq_front
 from torch.utils.data import DataLoader
 import loss
 
@@ -27,7 +27,7 @@ args = parser.parse_args()
 
 TXT  = "Use the sponge to clean up the dirt."
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-# torch.cuda.set_device("cuda:"+args.gpu_id)
+torch.cuda.set_device("cuda:"+args.gpu_id)
 
 
 class ContactEnergy():
@@ -41,16 +41,18 @@ class ContactEnergy():
         self._initialize_loss(mode = 'a')
 
         ## Data-loader
-        self.train_dataLoader = DataLoader(dataset=DatasetSeq(self.Config, mode = "train"),
+        train_dataset = DatasetSeq_front(self.Config, mode = "train")
+        self.train_dataLoader = DataLoader(dataset= train_dataset,
                          batch_size=self.Config.B, shuffle=True)
 
-        self.test_dataLoader = DataLoader(dataset=DatasetSeq(self.Config, mode = "test"),
+        self.test_dataLoader = DataLoader(dataset=DatasetSeq_front(self.Config, mode = "test"),
                          batch_size=self.Config.B, shuffle=False)
 
 
 
         ## Define policy model
-        self.policy = policy(self.Config.device, self.Config.dim_ft).cuda()
+        dimout = train_dataset.cnt_w * train_dataset.cnt_h
+        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_out= dimout).cuda()
         if  len(args.gpu_id) > 1:
             self.policy.transformer_encoder = nn.DataParallel(self.policy.transformer_encoder)
             self.policy._image_encoder = nn.DataParallel(self.policy._image_encoder)
@@ -168,33 +170,10 @@ class ContactEnergy():
         rgb = cv2.imread(rgb_path)
         rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)[:,:,:3]
 
-        uib = union_img_binary(cnt_pred.squeeze()) # W x H
-        uic = union_img(cnt_pred.squeeze()) # W x H X 3
-
-        ## iidx, jidx of pixels that are in contact from table surface
-        cnt_pxls = extract_cnt_pxls(uib)
-
-        ## convert contact pixels to 3D Cartesian world coordinates
-        cnt_pts = self.Config.contact_frame_to_world(cnt_pxls) # project from desk to front camera image space
-        
-        ## convert 3D Cartesian world coordinates to 2D image coordinates        
-        mapped = self.Config.world_to_camera(cnt_pts)
-
-        ## idx =  (iidx , jidx) converted to camera frame
-        idx = mapped[:2, :] / mapped[2, :]
-        idx = np.round(idx).astype(int)
-        idx = np.clip(idx, 0, 255)
-        
-        ## contact map in camera frame
-        cnt_mp = copy.copy(rgb)
-
-        ## extract contact color from original contact map (indicate contact order)
-        mapped_cnt = uic[cnt_pxls[:,1],cnt_pxls[:,0],:]
-        cnt_mp[ idx[1,:], idx[0,:] ,:] = mapped_cnt * 255.
-
-
-        overlaid = cnt_mp
-        return torch.tensor(overlaid)
+        uic = union_img(cnt_pred.squeeze()).numpy()
+        iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
+        rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
+        return torch.tensor(rgb)
 
     def get_energy_field(self):
         for i in range (self.Config.epoch):
@@ -203,8 +182,8 @@ class ContactEnergy():
 
             self._initialize_loss(mode = 'a')
 
-            contact_histories = {} #[0] * len(self.Config.train_idx) 
-            contact_histories_ovl = {} #[0] * len(self.Config.train_idx) 
+            contact_histories = [0] * len(self.Config.train_idx) 
+            contact_histories_ovl = [0] * len(self.Config.train_idx) 
 
             tot_loss = 0
 

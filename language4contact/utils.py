@@ -21,7 +21,7 @@ import io
 relu = torch.nn.ReLU()
 
 
-from utils import *
+from language4contact.utils import *
 
 def draw_line(start, end):
 
@@ -201,16 +201,23 @@ def get_traj_mask(traj):
 
 def energy_regularization(energy, mask = None, minmax = None, return_original = False):
 
+    ## if variable is numpy
+    if not type(energy) is np.ndarray:
+        energy = energy.detach().cpu().numpy()
+    # print(energy.shape)
+    if len(energy.shape) == 2:
+        energy = energy[np.newaxis,...]
+
     if mask is None:
         mask = np.ones_like(energy)
     else:
         mask = mask.numpy()
 
-    ## if variable is numpy
-    if not type(energy) is np.ndarray:
-        energy = energy.squeeze().detach().cpu().numpy()
-    iidx, jidx = np.where(mask != 0)
-    iidx_m, jidx_m = np.where(mask == 0)
+    if len(mask.shape) == 2:
+        mask = mask[np.newaxis,...]
+
+    bidx, iidx, jidx = np.where(mask != 0)
+    bidx_m, iidx_m, jidx_m = np.where(mask == 0)
 
     if minmax is None:
         max = np.amax(energy[iidx, jidx]) #.reshape(mask.shape[0], -1), axis = -1)# [:, np.newaxis, np.newaxis]
@@ -223,7 +230,12 @@ def energy_regularization(energy, mask = None, minmax = None, return_original = 
     # min = -max
     img_ori = cmap((energy - min) / (max - min))[..., :3]
     img = img_ori.copy()
-    img[ iidx_m, jidx_m, :] = 0
+    
+    if len(mask.shape) == 2:
+        img[ iidx_m, jidx_m, :] = 0
+    elif len(mask.shape) == 3:
+        img[ bidx_m, iidx_m, jidx_m, :] = 0
+
 
     if return_original:
         return torch.tensor(img), torch.tensor(img_ori)
@@ -240,9 +252,8 @@ def save_energy(energy, mask, f_n):
     # plt.colorbar()
 
 def save_script(filename, target_folder):
-
     # not included in output file
-    out_filename = os.path.join(target_folder, filename)
+    out_filename = os.path.join(target_folder, filename.split('/')[-1])
 
     with open(filename, 'r') as f:
         with open(out_filename, 'w') as out:
@@ -285,15 +296,16 @@ def union_img_binary(img_lst):
 
 # union of list of image array
 def union_img(img_lst):
+
     img = torch.zeros_like(img_lst[0])
     for idx, i in enumerate(img_lst):
         new = torch.ones_like(img_lst[0]) * (len(img_lst) - idx) / len(img_lst)
         img  = np.where(i > 0.8, new, img)
-
+    
     img_color = energy_regularization(img, minmax= (0,1))
     # mask out zeros for visualization
     iidx, jidx = np.where(img == 0.)
-    img_color[iidx, jidx, :] = 0
+    img_color[:, iidx, jidx, :] = 0
     return img_color
 
 
@@ -353,7 +365,6 @@ def  overlay_cnt_rgb(rgb_path, uib, uic, Config):
         overlaid = copy.copy(rgb)
 
         ## extract contact color from original contact map (indicate contact order)
-    
         mapped_cnt = uic[cnt_pxls[:,1],cnt_pxls[:,0],:]
         overlaid[ idx[1,:], idx[0,:] ,:] = mapped_cnt * 255.
 

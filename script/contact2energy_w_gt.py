@@ -11,24 +11,17 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-from utils import *
-from modules import contact_decoder, contact_mlp_decoder, policy
-from config import Config
-from dataset import Dataset
+from language4contact.utils import *
+from modules_gt import policy
+from config.config import Config
+from dataset import DatasetSeq_front_gt as Dataset
 from torch.utils.data import DataLoader
 import loss
 
-
+TXT  = "Use the sponge to clean up the dirt."
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
-
-args = parser.parse_args()
-
-TXT  = "Use the sponge to clean up the dirt."
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-# torch.cuda.set_device("cuda:"+args.gpu_id)
-
 
 class ContactEnergy():
     def __init__(self, log_path, test_idx = (30, 37)):
@@ -41,16 +34,17 @@ class ContactEnergy():
         self._initialize_loss(mode = 'a')
 
         ## Data-loader
-        self.DataLoader = DataLoader(dataset=Dataset(self.Config),
+        train_dataset = Dataset(self.Config, mode = 'train')
+        self.DataLoader = DataLoader(dataset = train_dataset,
                          batch_size=self.Config.B, shuffle=True)
 
+        self.DataLoader_test = DataLoader(dataset=Dataset(self.Config, mode = 'test'),
+                         batch_size=self.Config.B, shuffle=False)
+
         ## Define policy model
-        self.policy = policy(self.Config.device, self.Config.dim_ft).cuda()
-        if  len(args.gpu_id) > 1:
-            self.policy.transformer_encoder = nn.DataParallel(self.policy.transformer_encoder)
-            self.policy._image_encoder = nn.DataParallel(self.policy._image_encoder)
-            self.policy.segment_emb = nn.DataParallel(self.policy.segment_emb)
-            self.policy.transformer_decoder = nn.DataParallel(self.policy.transformer_decoder)
+        dimout = train_dataset.cnt_w * train_dataset.cnt_h
+        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_out= dimout).cuda()
+
 
         ## Set optimizer
         self.test = False if test_idx is None else True
@@ -63,7 +57,6 @@ class ContactEnergy():
                 # {"params" : self.feat}
             ], lr=0.0001)
 
-
     def save_model(self):
         path = self.logdir + "/policy.pth"
         # if not os.path.exists(path):
@@ -75,7 +68,6 @@ class ContactEnergy():
                     "segment_emb" : self.policy.segment_emb.state_dict(),
                     "optim" : self.optim.state_dict()
                     }, path)
-
 
     def _initlize_writer(self, log_dir):
         # Sets up a timestamped log directory.
@@ -101,63 +93,89 @@ class ContactEnergy():
         save_script('loss.py', logdir)
         save_script('config.py', logdir)
 
+    def  overlay_cnt_rgb(self, rgb_path, cnt_pred):
+        ## open rgb image with cv2
+        rgb = cv2.imread(rgb_path)
+        rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)[:,:,:3]
+
+        # uic = union_img(cnt_pred.squeeze()).numpy()
+        uic = cnt_pred.squeeze().detach().cpu().numpy()
+        iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
+        rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
+        return torch.tensor(rgb)
 
     def _evaluate_testdataset(self):
         contact_hist = []
-        energy_hist = []
+        contact_histories_ovl = []
+        cost_hist = []
+        vel_hist = []
+
         energy_loss = 0
         contact_loss = 0
-        for l in range(self.test_idx[0],self.test_idx[1]):
-            folder_path = f'dataset/logs/t_{l:02d}'
+        for data in self.DataLoader_test:
+            l = data["idx"]
+            rgb = data['traj_rgb'][0]
+            cost_gt = data['cost_map'][0]
+            traj_cnt_lst = data['traj_cnt_lst']
+            traj_len = data['traj_len']
+            mask_t = data['mask_t'].squeeze(0).detach().cpu()
 
-            traj_rgb_lst = folder2filelist(os.path.join(folder_path, 'rgb'), sort = True)
-            traj_cnt_lst = folder2filelist( os.path.join(folder_path, 'contact'), sort = True)
+            ## Feed forward
+            feat, seg_idx =  self.policy.input_processing(rgb, TXT)
+            contact, cost, vel, out = self.policy(feat, seg_idx)
 
-            feat, seg_idx =  self.policy.input_processing(traj_rgb_lst[0], TXT)
+            ## save history
+            cost_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), torch.tensor(mask_t), minmax = (0,1), return_original = True)
+            vel_reg = energy_regularization(vel.detach().cpu(), torch.tensor(mask_t), minmax = (0,1), return_original = False)
 
-            contact, energy, out = self.policy(feat, seg_idx)
-            mask_t = get_traj_mask(traj_cnt_lst)
-
-            energy_reg = energy_regularization(energy.detach().cpu(), torch.tensor(mask_t))
             contact_hist.append(contact.detach().cpu())
-            energy_hist.append(energy_reg.unsqueeze(0).detach().cpu())
+            cost_hist.append(cost_reg.detach().cpu())
+            vel_hist.append(vel_reg.detach().cpu())
+            contact_histories_ovl.append(self.overlay_cnt_rgb(rgb, round_mask(contact.detach().cpu()).unsqueeze(3) * cost_reg_ori))
 
 
-            contact_loss += torch.norm( torch.tensor(mask_t) - contact.detach().cpu(), p =2) / len(energy) * 1e2
+            ## calculate loss
+            contact_loss += torch.norm( torch.tensor(mask_t) - contact.detach().cpu(), p =2) / len(cost) * 1e2
+            energy_loss = torch.norm( cost_gt.to(self.Config.device) - cost, p =2) / len(cost)
 
-
-            for st in range(len(traj_cnt_lst) - self.Config.W + 1 ):
-                seq_gt = traj_cnt_lst[st:st+self.Config.W]
-                cnt_gt = fn2img(seq_gt, d = 1)
-
-                gt_score = loss.trajectory_score(energy, cnt_gt, range(0, self.Config.W), self.Config).detach().cpu()
-                random_score = loss.fast_score_negative(energy, cnt_gt, self.Config).detach().cpu()
-
-                energy_loss_i = torch.log(1 + torch.exp( 1e-3 * ( random_score - gt_score ))) * 1e2
-                energy_loss += energy_loss_i
-
-       
+       ## summary of result
         energy_loss_ave = energy_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
         contact_loss_ave = contact_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
-        return contact_hist, energy_hist, energy_loss_ave, contact_loss_ave
+        return contact_hist, cost_hist, vel_hist, contact_histories_ovl, energy_loss_ave, contact_loss_ave
 
-    def write_tensorboard_test(self, step, contact, energy, eng_loss_t, cnt_loss_t):
+
+    def write_tensorboard_test(self, step, contact, energy, vel, contact_ovl, eng_loss_t, cnt_loss_t):
         contact = torch.cat(contact, dim = 0).unsqueeze(3)
-        energy = torch.cat(energy, dim = 0)
+        energy = torch.stack(energy, dim = 0)
+        velocity = torch.stack(vel, dim = 0)
+
+        contact_ovl = torch.stack(contact_ovl, dim = 0)
+
         with self.file_writer.as_default():
+            tf.summary.image("contact_ovl_test", contact_ovl, max_outputs=len(contact_ovl), step=step)
+
             tf.summary.image("contact_test", contact, max_outputs=len(contact), step=step)
             tf.summary.image("energy_test", energy, max_outputs=len(energy), step=step)
+            tf.summary.image("velocity_test", velocity, max_outputs=len(energy), step=step)
+
             tf.summary.scalar("loss1_test", eng_loss_t.detach().cpu() , step=step)
             tf.summary.scalar("loss0_test", cnt_loss_t.detach().cpu(), step=step)
 
-
-
-    def write_tensorboard(self, step, contact, energy):
+    def write_tensorboard(self, step, contact, energy, vel, contact_ovl):
         contact = torch.cat(contact, dim = 0).unsqueeze(3)
         energy = torch.cat(energy, dim = 0)
+        vel = torch.cat(vel, dim = 0)
+
+        contact_ovl = torch.stack(contact_ovl, dim = 0)
+
         with self.file_writer.as_default():
             tf.summary.image("contact", contact, max_outputs=len(contact), step=step)
             tf.summary.image("energy", energy, max_outputs=len(energy), step=step)
+            tf.summary.image("velocity", vel, max_outputs=len(energy), step=step)
+
+            tf.summary.image("contact_ovl", contact_ovl, max_outputs=len(contact_ovl), step=step)
+
+
             tf.summary.scalar("tot_loss", self.tot_loss['sum'].detach().cpu()/ self.Config.len, step=step)
             tf.summary.scalar("loss0", self.tot_loss['loss0'].detach().cpu()/ self.Config.len, step=step)
             tf.summary.scalar("loss1", self.tot_loss['loss1'].detach().cpu()/ self.Config.len, step=step)
@@ -165,16 +183,18 @@ class ContactEnergy():
 
     def _initialize_loss(self, mode = 'p'): # 'p' = partial, 'a' = all
         if mode == 'a':
-            self.tot_loss = {'sum': 0, "loss0_i":0, "loss1_i": 0, "loss_aux_i": 0, "loss0":0, "loss1": 0, "loss_aux": 0}
+            self.tot_loss = {'sum': 0, "loss0_i":0, "loss1_i": 0, "loss2_i": 0, "loss_aux_i": 0, "loss0":0, "loss1": 0, "loss_aux": 0}
         elif mode == 'p':
             self.tot_loss['loss0_i'] = 0
             self.tot_loss['loss1_i'] = 0
+            self.tot_loss['loss2_i'] = 0
+
             self.tot_loss['loss_aux_i'] = 0
         else:
             raise Exception("Error : mode not recognized")
 
 
-    def get_energy_field(self, folder_path):
+    def training(self, folder_path):
         for i in range (self.Config.epoch):
             if i % 100 == 0 or i == self.Config.epoch - 1:
                 CE.save_model()
@@ -182,53 +202,49 @@ class ContactEnergy():
             tot_tot_loss = 0
             self._initialize_loss(mode = 'a')
 
-            contact_histories = [0] * self.Config.len
-            energy_histories = [0] * self.Config.len
+            contact_histories = [0] * self.DataLoader.__len__()
+            energy_histories = [0] * self.DataLoader.__len__()
+            contact_histories_ovl = [0] * self.DataLoader.__len__()
+            vel_histories = [0] * self.DataLoader.__len__()
+
 
             for data in self.DataLoader:
                 l = data["idx"]
                 rgb = data['traj_rgb'][0]
+                cost_gt = data['cost_map'][0].to(self.Config.device)
+                vel_gt = data['vel_map'][0].to(self.Config.device)
+
                 traj_cnt_lst = data['traj_cnt_lst']
                 traj_len = data['traj_len']
                 mask_t = data['mask_t'].to(self.Config.device).squeeze(0)
 
                 feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-                contact, energy, out = self.policy(feat, seg_idx)
+                contact, cost, vel_map, out = self.policy(feat, seg_idx)
 
 
                 # save histories
-                energy_reg = energy_regularization(energy.detach().cpu(), mask_t.detach().cpu())
-                energy_histories[l] = energy_reg.unsqueeze(0)
+                energy_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), mask_t.detach().cpu(), minmax = (0,1), return_original = True)
+                vel_reg = energy_regularization(vel_map.detach().cpu(), mask_t.detach().cpu(), minmax = (0,1))
+
                 contact_histories[l] = contact.detach().cpu()
+                energy_histories[l] = energy_reg.unsqueeze(0)
+                vel_histories[l] = vel_reg.unsqueeze(0)
+                contact_histories_ovl[l] = self.overlay_cnt_rgb(rgb, round_mask(contact.detach().cpu()).unsqueeze(3) * cost_reg_ori)
+
 
                 # loss
                 contact = contact.squeeze()
-                self.tot_loss['loss0_i'] = self.tot_loss['loss0_i'] +  torch.norm( mask_t - contact, p =2) / len(energy)
-                self.tot_loss['loss_aux_i'] = self.tot_loss['loss_aux_i'] + torch.norm(energy, p=2) / (150**2)  # + torch.norm(feat)/ len(feat) * 0.01 + torch.norm(out) * 1
+                self.tot_loss['loss0_i'] = self.tot_loss['loss0_i'] +  torch.norm( mask_t - contact, p =2) / len(cost)
+                self.tot_loss['loss1_i'] = self.tot_loss['loss1_i'] +  torch.norm( cost_gt - cost, p =2) / len(cost)
+                self.tot_loss['loss2_i'] = self.tot_loss['loss2_i'] +  torch.norm( vel_gt - vel_map, p =2) / len(cost)
 
-                for st in range( (traj_len - self.Config.W + 1)):
+                self.tot_loss['loss_aux_i'] = self.tot_loss['loss_aux_i'] + torch.norm(cost, p=2) / (150**2)  # + torch.norm(feat)/ len(feat) * 0.01 + torch.norm(out) * 1
 
-                    fnl = np.amin([st + self.Config.W, traj_len])
-                    cnt_gt = traj_cnt_lst[:, st:fnl]
-
-                    # cnt_gt = fn2img(seq_gt, d = 1)
-
-                    gt_score = loss.fast_trajectory_score(energy, cnt_gt, range(0, cnt_gt.shape[1]), self.Config)
-                    random_score = loss.fast_score_negative(energy, cnt_gt, self.Config)
-
-                    energy_loss_i = gt_score / (gt_score + random_score)  
-                    # energy_loss_i = random_score / (gt_score + random_score)           
-                    energy_loss_i = torch.log( 1 + energy_loss_i )
-
-                    self.tot_loss['loss1_i'] = self.tot_loss['loss1_i'] + energy_loss_i
-
-                    # self.tot_loss['loss1_i'] = self.tot_loss['loss1_i'] + torch.log(1 + torch.exp( 1e-3 * ( random_score/ float(self.Config.N) - gt_score ))) 
-                
                 if l % self.Config.B == self.Config.B - 1 or l == self.Config.len -1:
                     self.tot_loss['loss0'] = self.tot_loss['loss0']  + self.tot_loss['loss0_i'].detach().cpu()
                     self.tot_loss['loss1'] = self.tot_loss['loss1'] + self.tot_loss['loss1_i'].detach().cpu()
                     self.tot_loss['loss_aux'] = self.tot_loss['loss_aux'] +  self.tot_loss['loss_aux_i'].detach().cpu()
-                    self.tot_loss['sum'] = self.tot_loss['loss0_i'] * 1e2 + self.tot_loss['loss_aux_i']  * 1e-4 + self.tot_loss['loss1_i'] * 1e3
+                    self.tot_loss['sum'] = self.tot_loss['loss0_i'] * 1e2 + self.tot_loss['loss_aux_i']  * 1e-4 + self.tot_loss['loss1_i'] * 1e2 + self.tot_loss['loss2_i'] * 1e2
 
                     self.optim.zero_grad()
                     self.tot_loss['sum'].backward()
@@ -239,16 +255,15 @@ class ContactEnergy():
                     self._initialize_loss(mode = 'p')
 
 
-
             if i % 5 == 0 or i == self.Config.epoch -1:
-                self.write_tensorboard(i, contact_histories, energy_histories)
+                self.write_tensorboard(i, contact_histories, energy_histories, vel_histories, contact_histories_ovl)
             
-            # if i % 100 == 0 or i == self.Config.epoch -1:               
-            #     contact_histories_t, energy_histories_t, eng_loss_t, cnt_loss_t  = self._evaluate_testdataset()
-            #     self.write_tensorboard_test(i, contact_histories_t, energy_histories_t, eng_loss_t, cnt_loss_t)
+            if i % 10 == 0 or i == self.Config.epoch -1:               
+                contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t  = self._evaluate_testdataset()
+                self.write_tensorboard_test(i, contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t)
 
             tqdm.write("epoch: {}, loss: {}".format(i, tot_tot_loss))
 
 
-CE = ContactEnergy( log_path = 'transformer', test_idx = args.test_idx)
-CE.get_energy_field(f'dataset/logs/')
+CE = ContactEnergy( log_path = 'transformer_w_gt', test_idx = args.test_idx)
+CE.training(f'dataset/logs/')

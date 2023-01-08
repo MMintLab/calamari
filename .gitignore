@@ -3,6 +3,7 @@
 /.idea/
 /__pycache__/
 /Transformer_MM_Explainability/
+language4contact.egg-info/
 *.png
 *.jpg
 *.pth

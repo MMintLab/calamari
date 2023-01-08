@@ -5,7 +5,7 @@ import math
 import torch
 import torch.utils.data as data_utils
 
-from utils import *
+from language4contact.utils import *
 
 class DatasetSeq_front_feedback(torch.utils.data.Dataset):
     def __init__(self, Config, mode = 'train'):
@@ -104,7 +104,6 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
                     "idx": idx}
 
 
-
 class Dataset_front_gt_feedback(torch.utils.data.Dataset):
     def __init__(self, Config, mode = 'train'):
         self.Config = Config
@@ -119,12 +118,13 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
 
         self.data_summary = self.get_data_summary()
         self.cnt_w, self.cnt_h = self.get_cnt_img_dim()
+        self.l = self.__len__()
     
     def get_data_summary(self):
         data_summary = {'tot_data_flat': [], 'tot_data_index':{}}
         tot_length = 0
         for i in self.folder_idx:
-            folder_path = f'dataset/keyframes/t_{self.folder_idx[0]:02d}/{self.contact_folder}'
+            folder_path = f'dataset/keyframes/t_{i:02d}/{self.contact_folder}'
             # get the list of trajectories within the folder
             traj_cnt_fn = folder2filelist(folder_path)
             traj_cnt_fn.sort()
@@ -191,7 +191,7 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
             cost_map_i = cost[i] * cnt_img_lst[i]
             cost_map.append(cost_map_i)
         cost_map = torch.amax( torch.stack(cost_map), dim = 0)
-        cost_map = cost_map / torch.max(cost_map)
+        # cost_map = cost_map / torch.max(cost_map)
 
         ## assign high value to the pixels that are not in the contact area
         cost_map = torch.where(cost_map == 0, torch.ones_like(cost_map) * 5, cost_map)
@@ -231,7 +231,7 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
         mask_t = torch.tensor(mask_).to(self.Config.device)
 
         return   {"traj_rgb": traj_rgb_lst, 
-                    "traj_cnt_lst": traj_cnt_lst, 
+                    # "traj_cnt_lst": traj_cnt_lst, 
                     "mask_t": mask_t, 
                     "traj_len" : seq_l,
                     "cost_map": cost_map,

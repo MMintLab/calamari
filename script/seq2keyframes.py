@@ -1,7 +1,7 @@
 
 import os
 import cv2
-from utils import *
+from language4contact.utils import *
 
 import tkinter as tk
 from tkinter import *

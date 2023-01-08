@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from utils import *
+from language4contact.utils import *
 from modules import contact_decoder, contact_mlp_decoder
 
 class ContactEnergy:

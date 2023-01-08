@@ -23,14 +23,15 @@ class Config:
         self.epoch = 30000
         self.gamma = 0.96
 
-        self.B = 1
+        self.B = 24
         self.device = 'cuda'
         self.dim_ft = 64 # 32
         self.seed = 42
         self.len = 70 # number of training data
 
-        self.train_idx = np.arange(0,20)
+        self.train_idx = np.arange(0,30)
         self.test_idx = np.arange(140,150)
+        self.train_s = 10
 
         # self.n_idx = self.get_negative_idxs()
         self.g_mat = self.get_gamma_mat()

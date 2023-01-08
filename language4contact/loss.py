@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import itertools, time
-from utils import *
+from language4contact.utils import *
 
 def trajectory_score(energy, seq, idx = None, Config = None):
 

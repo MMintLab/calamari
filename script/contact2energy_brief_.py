@@ -11,9 +11,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-from utils import *
+from language4contact.utils import *
 from modules import contact_decoder, contact_mlp_decoder, policy
-from config import Config
+from config.config import Config
 from dataset import Dataset
 from torch.utils.data import DataLoader
 import loss
