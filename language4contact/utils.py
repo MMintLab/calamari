@@ -219,6 +219,7 @@ def energy_regularization(energy, mask = None, minmax = None, return_original = 
     bidx, iidx, jidx = np.where(mask != 0)
     bidx_m, iidx_m, jidx_m = np.where(mask == 0)
 
+
     if minmax is None:
         max = np.amax(energy[iidx, jidx]) #.reshape(mask.shape[0], -1), axis = -1)# [:, np.newaxis, np.newaxis]
         min = np.amin(energy[iidx, jidx])#.reshape(mask.shape[0], -1), axis = -1)#[:, np.newaxis, np.newaxis]

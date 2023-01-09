@@ -144,7 +144,7 @@ class ContactEnergy():
             contact_round = round_mask(contact.detach().cpu())
 
             ## save history
-            cost_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), contact_round, minmax = (0,1), return_original = True)
+            cost_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), contact_round, minmax = (0,400), return_original = True)
             vel_reg = energy_regularization(vel.detach().cpu(), torch.tensor(mask_t.detach().cpu()), minmax = (0,1), return_original = False)
 
             contact_hist.append(contact.detach().cpu())
@@ -241,7 +241,7 @@ class ContactEnergy():
 
 
                 # save histories
-                energy_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), mask_t.detach().cpu(), minmax = (0,1), return_original = True)
+                energy_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), mask_t.detach().cpu(), minmax = (0,400), return_original = True)
                 vel_reg = energy_regularization(vel_map.detach().cpu(), mask_t.detach().cpu(), minmax = (0,1))
 
 

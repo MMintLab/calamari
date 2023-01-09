@@ -1,9 +1,10 @@
 /logs/
 /dataset/
 /.idea/
-/__pycache__/
-/Transformer_MM_Explainability/
+*/__pycache__/
+*/Transformer_MM_Explainability/
 language4contact.egg-info/
 *.png
 *.jpg
 *.pth
+/__pycache__/
