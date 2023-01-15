@@ -8,11 +8,12 @@ import torch.utils.data as data_utils
 from language4contact.utils import *
 
 class DatasetSeq_front_feedback(torch.utils.data.Dataset):
-    def __init__(self, Config, mode = 'train'):
+    def __init__(self, Config, mode = 'train', seq_l = -1):
         self.Config = Config
         self.len = self.Config.len
         self.contact_folder = 'contact_key_front'
         self.mode = mode 
+        self.return_seq_l = seq_l
         if self.mode == "train":
             self.folder_idx = self.Config.train_idx
         if self.mode == "test":
@@ -42,7 +43,7 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         data_summary = {'tot_rgb_flat': [], 'tot_rgb_index':{}}
         tot_length = 0
         for i in self.folder_idx:
-            folder_path = f'dataset/keyframes/t_{self.folder_idx[0]:02d}/rgb'
+            folder_path = f'dataset/keyframes/t_{i:02d}/rgb'
             # get the list of trajectories within the folder
             traj_cnt_fn = folder2filelist(folder_path)
             traj_cnt_fn.sort()
@@ -54,7 +55,6 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
             for local_idx_i in local_idx:
                 data_summary['tot_rgb_index'][tot_length + local_idx_i] = (i, local_idx_i)
             tot_length += len(traj_cnt_fn)
-
         return data_summary
 
     def __len__(self):
@@ -77,6 +77,7 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         traj_rgb_path = os.path.join(os.path.join( folder_path), 'rgb' )
         traj_rgb_lst = folder2filelist(traj_rgb_path)
         traj_rgb_lst.sort()
+
         options = self._get_idxs_from_fns(traj_rgb_lst[local_idx:])
         traj_rgb_lst = traj_rgb_lst[local_idx]
 
@@ -87,6 +88,9 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
 
         traj_cnt_fn_idx = self._get_valid_keyc_idx(options, cnt_idx_cands)
         traj_cnt_fn = [ traj_cnt_fn_all[i] for i in traj_cnt_fn_idx]
+        if self.return_seq_l > 0:
+            traj_cnt_fn = traj_cnt_fn[:self.return_seq_l]
+
         traj_cnt_lst = fn2img(traj_cnt_fn, d = 1)
         traj_cnt_lst = torch.stack(traj_cnt_lst, dim = 0)
         
@@ -153,7 +157,7 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
         return w, h
     
     
-    def _get_gt_cost(self, traj_cnt_lst):
+    def _get_gt_cost(self, traj_cnt_lst, mask_t):
 
         center_lst = []
         cnt_img_lst = []
@@ -172,7 +176,7 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
 
         ## ground truth cost
         center_lst = torch.tensor(center_lst)
-        l2 = torch.norm( center_lst[1:] - center_lst[:-1], dim = -1) 
+        l2 = torch.norm( center_lst[1:] - center_lst[:-1], dim = -1) / 160
         
         ## append 0 to the end of tensor
         vel = torch.cat((l2, torch.tensor([0])), dim = 0)
@@ -194,7 +198,7 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
         # cost_map = cost_map / torch.max(cost_map)
 
         ## assign high value to the pixels that are not in the contact area
-        cost_map = torch.where(cost_map == 0, torch.ones_like(cost_map) * 5, cost_map)
+        cost_map = torch.where(torch.tensor(mask_t) == 0, torch.ones_like(cost_map) * 10, cost_map)
 
 
         ## velocity map
@@ -223,12 +227,16 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
         traj_rgb_lst.sort()
         traj_rgb_lst = traj_rgb_lst[local_idx]
 
-        traj_cnt_lst = fn2img(traj_cnt_fn, d = 1)
-        traj_cnt_lst = torch.stack(traj_cnt_lst, dim = 0)
-        cost_map, vel = self._get_gt_cost(traj_cnt_lst)
-
         mask_ = get_traj_mask(traj_cnt_fn)
         mask_t = torch.tensor(mask_).to(self.Config.device)
+
+        traj_cnt_lst = fn2img(traj_cnt_fn, d = 1)
+        traj_cnt_lst = torch.stack(traj_cnt_lst, dim = 0)
+        cost_map, vel = self._get_gt_cost(traj_cnt_lst, mask_)
+
+
+
+        # print( torch.amax( cost_map * torch.tensor(mask_)))
 
         return   {"traj_rgb": traj_rgb_lst, 
                     # "traj_cnt_lst": traj_cnt_lst, 
@@ -237,7 +245,6 @@ class Dataset_front_gt_feedback(torch.utils.data.Dataset):
                     "cost_map": cost_map,
                     "vel_map": vel,
                     "idx": idx}
-
 
 
 class DatasetSeq_front_gt(torch.utils.data.Dataset):

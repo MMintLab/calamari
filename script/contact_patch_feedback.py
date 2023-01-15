@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 
 from config.config import Config
-from language4contact.dataset import Dataset_front_gt_feedback as Dataset
+from language4contact.dataset import DatasetSeq_front_feedback as Dataset
 
 
 parser = ArgumentParser()
@@ -42,11 +42,11 @@ class ContactEnergy():
         self._initialize_loss(mode = 'a')
 
         ## Data-loader
-        self.train_dataset = Dataset(self.Config, mode = 'train')
+        self.train_dataset = Dataset(self.Config, mode = 'train', seq_l = 1)
         self.DataLoader = DataLoader(dataset = self.train_dataset,
                          batch_size=self.Config.B, shuffle=True)
 
-        self.DataLoader_test = DataLoader(dataset=Dataset(self.Config, mode = 'test'),
+        self.DataLoader_test = DataLoader(dataset=Dataset(self.Config, mode = 'test', seq_l = 1),
                          batch_size=1, shuffle=False)
 
         ## Define policy model
@@ -121,53 +121,43 @@ class ContactEnergy():
     def _evaluate_testdataset(self):
         contact_hist = []
         contact_histories_ovl = []
-        cost_hist = []
-        vel_hist = []
 
-        energy_loss = 0
         contact_loss = 0
-        vel_loss = 0
         for data in self.DataLoader_test:
             l = data["idx"]
+            print(l)
             rgb = data['traj_rgb']
-            cost_gt = data['cost_map']
-            vel_gt = data['vel_map'].to(self.Config.device)
 
 
             # traj_cnt_lst = data['traj_cnt_lst']
-            traj_len = data['traj_len']
             mask_t = data['mask_t'].squeeze(0)
 
             ## Feed forward
             feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-            contact, cost, vel, out = self.policy(feat, seg_idx)
-            contact_round = round_mask(contact.detach().cpu())
+            contact, _, _, out = self.policy(feat, seg_idx)
+            # contact_round = round_mask(contact.detach().cpu())
+            # contact_round = torch.dstack([contact_round, contact_round, contact_round]).reshape((256, 256, 3))
+
 
             ## save history
-            cost_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), contact_round, minmax = (0,2.5), return_original = True)
-            vel_reg = energy_regularization(vel.detach().cpu(), torch.tensor(mask_t.detach().cpu()), minmax = (0,1), return_original = False)
 
             contact_hist.append(contact.detach().cpu())
-            cost_hist.append(cost_reg.detach().cpu())
-            vel_hist.append(vel_reg.detach().cpu())
-            contact_histories_ovl.append(self.overlay_cnt_rgb(rgb[0], contact_round.unsqueeze(3) * cost_reg_ori))
+
+            cost_reg_ori_ = round_mask(contact[0].detach().cpu()).unsqueeze(2)
+            cost_reg_ori_ = torch.dstack([cost_reg_ori_,cost_reg_ori_,cost_reg_ori_])
+            contact_ovl = self.overlay_cnt_rgb(rgb[0], cost_reg_ori_)
+            contact_histories_ovl.append(contact_ovl)
 
             ## Add loss
-            energy_loss +=  torch.norm( cost_gt.detach().cpu() - cost.detach().cpu(), p =2) / len(cost)
-            contact_loss +=  torch.norm( mask_t.detach().cpu() - contact.detach().cpu(), p =2) / len(cost)
-            vel_loss +=  torch.norm( vel_gt.detach().cpu() - vel.detach().cpu(), p =2) / len(cost)
+            contact_loss +=  torch.norm( mask_t.detach().cpu() - contact.detach().cpu(), p =2) / len(contact)
        
        
        ## summary of result
-        energy_loss_ave = energy_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
         contact_loss_ave = contact_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
-        vel_loss_ave = vel_loss / ((self.test_idx[1] - self.test_idx[0] + 1) / 4 )
-        return contact_hist, cost_hist, vel_hist, contact_histories_ovl, energy_loss_ave, contact_loss_ave
+        return contact_hist, contact_histories_ovl, contact_loss_ave
 
-    def write_tensorboard_test(self, step, contact, energy, vel, contact_ovl, eng_loss_t, cnt_loss_t):
+    def write_tensorboard_test(self, step, contact, contact_ovl, cnt_loss_t):
         contact = torch.cat(contact, dim = 0).unsqueeze(3)
-        energy = torch.cat(energy, dim = 0)
-        velocity = torch.cat(vel, dim = 0)
 
         contact_ovl = torch.stack(contact_ovl, dim = 0)
 
@@ -175,28 +165,19 @@ class ContactEnergy():
             tf.summary.image("contact_ovl_test", contact_ovl, max_outputs=len(contact_ovl), step=step)
 
             tf.summary.image("contact_test", contact, max_outputs=len(contact), step=step)
-            tf.summary.image("energy_test", energy, max_outputs=len(energy), step=step)
-            tf.summary.image("velocity_test", velocity, max_outputs=len(energy), step=step)
-
-            tf.summary.scalar("loss1_test", eng_loss_t , step=step)
             tf.summary.scalar("loss0_test", cnt_loss_t, step=step)
 
-    def write_tensorboard(self, step, contact, energy, vel, contact_ovl):
+    def write_tensorboard(self, step, contact, contact_ovl):
         contact = torch.stack(contact, dim = 0).unsqueeze(3)
-        energy = torch.cat(energy, dim = 0)
-        vel = torch.cat(vel, dim = 0)
 
         contact_ovl = torch.stack(contact_ovl, dim = 0)
 
         with self.file_writer.as_default():
             tf.summary.image("contact", contact, max_outputs=len(contact), step=step)
-            tf.summary.image("energy", energy, max_outputs=len(energy), step=step)
-            tf.summary.image("velocity", vel, max_outputs=len(energy), step=step)
             tf.summary.image("contact_ovl", contact_ovl, max_outputs=len(contact_ovl), step=step)
 
             tf.summary.scalar("tot_loss", self.tot_loss['sum'].detach().cpu()/ self.Config.len, step=step)
             tf.summary.scalar("loss0", self.tot_loss['loss0'].detach().cpu()/ self.Config.len, step=step)
-            tf.summary.scalar("loss1", self.tot_loss['loss1'].detach().cpu()/ self.Config.len, step=step)
             tf.summary.scalar("loss_aux", self.tot_loss['loss_aux'].detach().cpu() / self.Config.len, step=step)
 
     def _initialize_loss(self, mode = 'p'): # 'p' = partial, 'a' = all
@@ -219,21 +200,16 @@ class ContactEnergy():
             tot_tot_loss = 0
             self._initialize_loss(mode = 'a')
 
-            l_len = 2000
+            l_len = 10
             contact_histories = [0] * l_len # self.train_dataset.__len__() 
-            energy_histories = [0] *  l_len #self.train_dataset.__len__() 
             contact_histories_ovl = [0] * l_len #self.train_dataset.__len__() 
-            vel_histories = [0] * l_len #self.train_dataset.__len__()
 
             l_i_hist = []
             for data in self.DataLoader:
                 l = data["idx"]
                 rgb = data['traj_rgb']
-                cost_gt = data['cost_map'].to(self.Config.device)
-                vel_gt = data['vel_map'].to(self.Config.device)
 
                 # traj_cnt_lst = data['traj_cnt_lst']
-                traj_len = data['traj_len']
                 mask_t = data['mask_t'].to(self.Config.device).squeeze(0)
 
                 feat, seg_idx =  self.policy.input_processing(rgb, TXT)
@@ -249,19 +225,15 @@ class ContactEnergy():
                     if l_i < l_len: 
                         l_i_hist.append(l_i)
                         contact_histories[l_i] = contact[l_ir].detach().cpu()
-                        energy_histories[l_i] = energy_reg[l_ir].unsqueeze(0)
-                        vel_histories[l_i] = vel_reg[l_ir].unsqueeze(0)
                         
-                        cost_reg_ori_ = round_mask(contact[l_ir].detach().cpu()).unsqueeze(2) * cost_reg_ori[l_ir]
+                        cost_reg_ori_ = round_mask(contact[l_ir].detach().cpu()).unsqueeze(2)
+                        cost_reg_ori_ = torch.dstack([cost_reg_ori_,cost_reg_ori_,cost_reg_ori_])
                         contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb[l_ir], cost_reg_ori_)
 
 
                 # loss
                 contact = contact.squeeze()
-                self.tot_loss['loss0_i'] = self.tot_loss['loss0_i'] +  torch.norm( mask_t - contact, p =2) / len(cost)
-                self.tot_loss['loss1_i'] = self.tot_loss['loss1_i'] +  torch.norm( cost_gt - cost, p =2) / len(cost)
-                self.tot_loss['loss2_i'] = self.tot_loss['loss2_i'] +  torch.norm( vel_gt - vel_map, p =2) / len(cost)
-                # print(self.tot_loss['loss0_i'],self.tot_loss['loss1_i'], self.tot_loss['loss2_i'])
+                self.tot_loss['loss0_i'] = self.tot_loss['loss0_i'] +  torch.norm( mask_t - contact, p =2) / len(cost)                # print(self.tot_loss['loss0_i'],self.tot_loss['loss1_i'], self.tot_loss['loss2_i'])
                 self.tot_loss['loss_aux_i'] = torch.tensor(0) # self.tot_loss['loss_aux_i'] + torch.norm(cost, p=2) / (150**2)  # + torch.norm(feat)/ len(feat) * 0.01 + torch.norm(out) * 1
                 self.tot_loss['sum'] = self.tot_loss['loss0_i'] * 1e2 + self.tot_loss['loss_aux_i']  * 1e-4 + self.tot_loss['loss1_i'] * 1e2 + self.tot_loss['loss2_i'] * 1e2
 
@@ -271,7 +243,6 @@ class ContactEnergy():
 
                 # Save log
                 self.tot_loss['loss0'] = self.tot_loss['loss0']  + self.tot_loss['loss0_i'].detach().cpu()
-                self.tot_loss['loss1'] = self.tot_loss['loss1'] + self.tot_loss['loss1_i'].detach().cpu()
                 self.tot_loss['loss_aux'] = self.tot_loss['loss_aux'] +  self.tot_loss['loss_aux_i'].detach().cpu()
 
 
@@ -281,14 +252,14 @@ class ContactEnergy():
                 self._initialize_loss(mode = 'p')
 
             if i % 5 == 0:
-                self.write_tensorboard(i, contact_histories, energy_histories, vel_histories, contact_histories_ovl)
+                self.write_tensorboard(i, contact_histories, contact_histories_ovl)
             
             if i % 10 == 0:               
-                contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t  = self._evaluate_testdataset()
-                self.write_tensorboard_test(i, contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t)
+                contact_histories_t, contact_histories_ovl, cnt_loss_t  = self._evaluate_testdataset()
+                self.write_tensorboard_test(i, contact_histories_t, contact_histories_ovl, cnt_loss_t)
 
             tqdm.write("epoch: {}, loss: {}".format(i, tot_tot_loss))
 
 
-CE = ContactEnergy( log_path = 'transformer_w_gt_feedback', test_idx = args.test_idx)
+CE = ContactEnergy( log_path = 'transformer_single_patch_feedback', test_idx = args.test_idx)
 CE.training(f'dataset/logs/')
