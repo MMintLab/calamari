@@ -181,7 +181,7 @@ class ContactEnergy():
 
     def get_energy_field(self):
         for i in range (self.Config.epoch):
-            if i % 100 == 0 or i == self.Config.epoch - 1:
+            if i % 10 == 0 or i == self.Config.epoch - 1:
                 CE.save_model()
 
             self._initialize_loss(mode = 'a')
@@ -229,7 +229,7 @@ class ContactEnergy():
             if i % 5 == 0 or i == self.Config.epoch -1:
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl)
             
-            if i % 100 == 0 or i == self.Config.epoch -1:               
+            if i % 10 == 0 or i == self.Config.epoch -1:               
                 contact_histories, contact_histories_ovl, loss0_i  = self._evaluate_testdataset()
                 self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, loss0_i)
 

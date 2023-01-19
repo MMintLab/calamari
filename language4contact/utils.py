@@ -220,6 +220,7 @@ def energy_regularization(energy, mask = None, minmax = None, return_original = 
     bidx_m, iidx_m, jidx_m = np.where(mask == 0)
 
 
+    # print(np.amax(energy[bidx, iidx, jidx]), np.amin(energy[bidx, iidx, jidx]))
     if minmax is None:
         max = np.amax(energy[iidx, jidx]) #.reshape(mask.shape[0], -1), axis = -1)# [:, np.newaxis, np.newaxis]
         min = np.amin(energy[iidx, jidx])#.reshape(mask.shape[0], -1), axis = -1)#[:, np.newaxis, np.newaxis]
@@ -370,3 +371,24 @@ def  overlay_cnt_rgb(rgb_path, uib, uic, Config):
         overlaid[ idx[1,:], idx[0,:] ,:] = mapped_cnt * 255.
 
     return torch.tensor(overlaid)
+
+
+def  overlay_cnt_rgb(rgb_path, cnt_pred, rgb_image = None):
+    ## open rgb image with cv2
+    if rgb_image is None:
+        rgb = cv2.imread(rgb_path)
+        rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)[:,:,:3]
+    else:
+        rgb = copy.deepcopy(rgb_image)
+
+    ## If sizes don't match
+    # print(rgb.shape, cnt_pre.shap[e])
+    if rgb.shape[0] != cnt_pred.shape[0]:
+        rgb = cv2.resize(rgb, cnt_pred.shape[:2])
+
+
+    uic = cnt_pred.squeeze().detach().cpu().numpy()
+
+    iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
+    rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
+    return torch.tensor(rgb)

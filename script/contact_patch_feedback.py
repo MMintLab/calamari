@@ -194,7 +194,7 @@ class ContactEnergy():
 
     def training(self, folder_path):
         for i in range (self.Config.epoch):
-            if i % 100 == 0 or i == self.Config.epoch - 1:
+            if i % 10 == 0 or i == self.Config.epoch - 1:
                 CE.save_model()
 
             tot_tot_loss = 0

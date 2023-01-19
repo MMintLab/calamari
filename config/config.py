@@ -23,13 +23,13 @@ class Config:
         self.epoch = 30000
         self.gamma = 0.96
 
-        self.B = 16
+        self.B = 40
         self.device = 'cuda'
         self.dim_ft = 64 # 32
         self.seed = 42
         self.len = 70 # number of training data
 
-        self.train_idx = np.arange(0,50)
+        self.train_idx = np.arange(0,140)
         self.test_idx = np.arange(140,150)
         self.train_s = 10
 

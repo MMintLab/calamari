@@ -21,6 +21,7 @@ from language4contact.dataset import Dataset_front_gt_feedback as Dataset
 
 
 parser = ArgumentParser()
+parser.add_argument("--logdir", default = '', type=str, help="relative log directory")
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
 
@@ -40,6 +41,7 @@ class ContactEnergy():
         self.log_path = f'logs/{log_path}'
         self._initlize_writer(self.log_path)
         self._initialize_loss(mode = 'a')
+        self.epoch_start = 0
 
         ## Data-loader
         self.train_dataset = Dataset(self.Config, mode = 'train')
@@ -54,11 +56,19 @@ class ContactEnergy():
         self.policy = policy(self.Config.device, self.Config.dim_ft, dim_out= dimout).cuda()
 
 
-        if  len(args.gpu_id) > 1:
-            self.policy.transformer_encoder = nn.DataParallel(self.policy.transformer_encoder)
-            self.policy._image_encoder = nn.DataParallel(self.policy._image_encoder)
-            self.policy.segment_emb = nn.DataParallel(self.policy.segment_emb)
-            self.policy.transformer_decoder = nn.DataParallel(self.policy.transformer_decoder)
+        if len(args.logdir) > 0:
+            pretrained = torch.load(args.logdir)
+            self.policy._image_encoder.load_state_dict(pretrained["image_encoder"])
+            self.policy.transformer_encoder.load_state_dict(
+                pretrained["transformer_encoder"]
+            )
+            self.policy.transformer_decoder.load_state_dict(
+                pretrained["transformer_decoder"]
+            )
+            self.policy.segment_emb.load_state_dict(
+                pretrained["segment_emb"]
+            )
+
 
         ## Set optimizer
         self.test = False if test_idx is None else True
@@ -69,13 +79,23 @@ class ContactEnergy():
                 {"params" : self.policy.segment_emb.parameters()},
                 {"params": self.policy.transformer_decoder.parameters()}, #, "lr":0.005
                 # {"params" : self.feat}
-            ], lr=0.0001)
+            ], lr=0.001)
 
-    def save_model(self):
+        if len(args.logdir) > 0:
+            self.optim.load_state_dict(
+                pretrained["optim"]
+            )
+            self.epoch_start = pretrained["epoch"]
+            log_path = os.path.pathdir( args.logdir ).split('/')[-1]
+            self.log_path = f'logs/{log_path}'
+            
+
+
+    def save_model(self, epoch):
         path = self.logdir + "/policy.pth"
         # if not os.path.exists(path):
         #     os.makedirs(path)
-        torch.save({
+        torch.save({"epoch": epoch,
                     "transformer_encoder" : self.policy.transformer_encoder.state_dict(),
                     "image_encoder" : self.policy._image_encoder.state_dict(),
                     "transformer_decoder" : self.policy.transformer_decoder.state_dict(),
@@ -141,6 +161,9 @@ class ContactEnergy():
             ## Feed forward
             feat, seg_idx =  self.policy.input_processing(rgb, TXT)
             contact, cost, vel, out = self.policy(feat, seg_idx)
+
+            elu = torch.nn.ELU()
+            contact = elu(contact)
             contact_round = round_mask(contact.detach().cpu())
 
             ## save history
@@ -212,14 +235,14 @@ class ContactEnergy():
             raise Exception("Error : mode not recognized")
 
     def training(self, folder_path):
-        for i in range (self.Config.epoch):
-            if i % 100 == 0 or i == self.Config.epoch - 1:
-                CE.save_model()
-
+        for i in range (self.epoch_start, self.Config.epoch):
+            if i % 5 == 0 or i == self.Config.epoch - 1:
+                CE.save_model(i)
+            print(f"start training epoch {i}")
             tot_tot_loss = 0
             self._initialize_loss(mode = 'a')
 
-            l_len = 2000
+            l_len = 1000
             contact_histories = [0] * l_len # self.train_dataset.__len__() 
             energy_histories = [0] *  l_len #self.train_dataset.__len__() 
             contact_histories_ovl = [0] * l_len #self.train_dataset.__len__() 
@@ -241,6 +264,8 @@ class ContactEnergy():
 
 
                 # save histories
+                # energy_reg_gt, _ = energy_regularization(cost_gt.detach().cpu(), mask_t.detach().cpu(), minmax = (0,2.5), return_original = True)
+                # cv2.imwrite('energy_reg_gt.png', energy_reg_gt[0].detach().cpu().numpy()* 255.)
                 energy_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), mask_t.detach().cpu(), minmax = (0,2.5), return_original = True)
                 vel_reg = energy_regularization(vel_map.detach().cpu(), mask_t.detach().cpu(), minmax = (0,1))
 
@@ -279,15 +304,19 @@ class ContactEnergy():
                 torch.cuda.empty_cache()
                 tot_tot_loss += copy.copy(self.tot_loss['sum'].detach().cpu())
                 self._initialize_loss(mode = 'p')
+            
+            tqdm.write("epoch: {}, loss: {}".format(i, tot_tot_loss))
 
             if i % 5 == 0:
+                print("save training result")
                 self.write_tensorboard(i, contact_histories, energy_histories, vel_histories, contact_histories_ovl)
             
-            if i % 10 == 0:               
+            if i % 10 == 0:
+                print("save testing result")
+               
                 contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t  = self._evaluate_testdataset()
                 self.write_tensorboard_test(i, contact_histories_t, energy_histories_t, vel_histories_t, contact_histories_ovl, eng_loss_t, cnt_loss_t)
 
-            tqdm.write("epoch: {}, loss: {}".format(i, tot_tot_loss))
 
 
 CE = ContactEnergy( log_path = 'transformer_w_gt_feedback', test_idx = args.test_idx)

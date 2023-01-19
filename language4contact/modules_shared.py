@@ -5,6 +5,7 @@ import math
 from torch import nn
 import numpy as np
 from PIL import Image
+import cv2
 
 from language4contact.modules_shared import *
 from .resnet import ResNet, ResidualBlock
@@ -43,9 +44,15 @@ class ClipExplainability(nn.Module):
             for i in range(batch_size):
                 heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
                 heatmaps.append(heatmap)
+                # print(heatmap)
+                # heatmap_sv = heatmap / torch.amax(heatmap) * 100.0
+                # heatmap_sv = heatmap_sv.unsqueeze(2).type(torch.int8)
+                # cv2.imwrite(f"hm_{i}.png",  heatmap_sv.detach().cpu().numpy())
+
 
             txt_emb_batch.append(txt_emb)
             heatmaps_batch.append( torch.stack(heatmaps))
+
         return txt_emb, torch.stack(heatmaps_batch)
 
 
