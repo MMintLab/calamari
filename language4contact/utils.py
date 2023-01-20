@@ -302,7 +302,7 @@ def union_img(img_lst):
     img = torch.zeros_like(img_lst[0])
     for idx, i in enumerate(img_lst):
         new = torch.ones_like(img_lst[0]) * (len(img_lst) - idx) / len(img_lst)
-        img  = np.where(i > 0.8, new, img)
+        img  = np.where(i > 0.5, new, img)
     
     img_color = energy_regularization(img, minmax= (0,1))
     # mask out zeros for visualization
@@ -389,6 +389,21 @@ def  overlay_cnt_rgb(rgb_path, cnt_pred, rgb_image = None):
 
     uic = cnt_pred.squeeze().detach().cpu().numpy()
 
+    iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
+    rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
+    return torch.tensor(rgb)
+
+def seq_overlay_cnt_rgb(rgb_path, cnt_pred, rgb=None):
+    if rgb is None:
+        ## open rgb image with cv2
+        rgb = cv2.imread(rgb_path)
+        rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)[:,:,:3]* 255.
+    else:
+        rgb = cv2.resize(rgb, cnt_pred.shape[:2])
+
+    # uic = union_img(cnt_pred.squeeze())
+    print(cnt_pred.shape)
+    uic = cnt_pred.numpy()
     iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
     rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
     return torch.tensor(rgb)

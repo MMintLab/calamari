@@ -86,7 +86,7 @@ class ContactEnergy():
                 pretrained["optim"]
             )
             self.epoch_start = pretrained["epoch"]
-            log_path = os.path.pathdir( args.logdir ).split('/')[-1]
+            log_path = os.path.dirname( os.path.abspath(args.logdir )).split('/')[-1]
             self.log_path = f'logs/{log_path}'
             
 
@@ -213,8 +213,14 @@ class ContactEnergy():
 
         with self.file_writer.as_default():
             tf.summary.image("contact", contact, max_outputs=len(contact), step=step)
+        
+        with self.file_writer.as_default():
             tf.summary.image("energy", energy, max_outputs=len(energy), step=step)
+
+        with self.file_writer.as_default():
             tf.summary.image("velocity", vel, max_outputs=len(energy), step=step)
+
+        with self.file_writer.as_default():
             tf.summary.image("contact_ovl", contact_ovl, max_outputs=len(contact_ovl), step=step)
 
             tf.summary.scalar("tot_loss", self.tot_loss['sum'].detach().cpu()/ self.Config.len, step=step)
@@ -237,7 +243,8 @@ class ContactEnergy():
     def training(self, folder_path):
         for i in range (self.epoch_start, self.Config.epoch):
             if i % 5 == 0 or i == self.Config.epoch - 1:
-                CE.save_model(i)
+                if i != self.epoch_start:
+                    CE.save_model(i)
             print(f"start training epoch {i}")
             tot_tot_loss = 0
             self._initialize_loss(mode = 'a')
