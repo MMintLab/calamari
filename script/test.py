@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-
 import torch
 
 
@@ -11,7 +10,7 @@ parser.add_argument("--indir", type=str, help="test image dir")
 parser.add_argument("--savedir", type=str, help="result save dir (default = log dir)")
 args = parser.parse_args()
 
-# python script/test_sim2real.py --gpu_id 1 --logdir logs/transformer_seq2seq_feedback/20230116-115230/policy.pth --model_type m2 --indir dataset/real/dust.jpg 
+# python script/test.py --gpu_id 1 --logdir logs/transformer_seq2seq_feedback/20230116-115230/policy.pth --model_type m2 --indir dataset/real/dust.jpg
 
 
 from config.config import Config
