@@ -71,11 +71,11 @@ class ContactEnergy():
             ], lr=0.0003)
 
 
-    def save_model(self):
+    def save_model(self, epoch):
         path = self.logdir + "/policy.pth"
         # if not os.path.exists(path):
         #     os.makedirs(path)
-        torch.save({
+        torch.save({"epoch": epoch, 
                     "transformer_encoder" : self.policy.transformer_encoder.state_dict(),
                     "image_encoder" : self.policy._image_encoder.state_dict(),
                     "transformer_decoder" : self.policy.transformer_decoder.state_dict(),
@@ -181,8 +181,8 @@ class ContactEnergy():
 
     def get_energy_field(self):
         for i in range (self.Config.epoch):
-            if i % 10 == 0 or i == self.Config.epoch - 1:
-                CE.save_model()
+            if i % 10 == 5 or i == self.Config.epoch - 1:
+                CE.save_model(i)
 
             self._initialize_loss(mode = 'a')
 
