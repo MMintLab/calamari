@@ -23,7 +23,7 @@ elif args.model_type == 'm2':
 elif args.model_type == 'm3':
     from language4contact.modules_gt import policy
 
-class main:
+class PretrainedPolicy:
     def __init__(self):
         # class variable
         self.Config = Config()
@@ -106,7 +106,7 @@ class main:
 
 
 if __name__ == "__main__":
-    m = main()
+    m = PretrainedPolicy()
     energy_reg = m.feedforward([args.indir], "Use the sponge to clean up the dirt.")
     cv2.imwrite("energy_reg.png", energy_reg.numpy() * 255.0)
 # ## load model for m1, m2, m3
