@@ -1,18 +1,10 @@
-import time
 from argparse import ArgumentParser
 from datetime import datetime
 
-import cv2
-import torch
-import torch.nn as nn
 from tqdm import tqdm
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import tensorflow as tf
 
 from language4contact.utils import *
-from modules import contact_decoder, contact_mlp_decoder, policy
+from modules import policy
 from config.config import Config
 from dataset import Dataset
 from torch.utils.data import DataLoader

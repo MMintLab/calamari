@@ -1,31 +1,24 @@
-from argparse import ArgumentParser
-
-parser = ArgumentParser()
-parser.add_argument("--gpu_id", type=str, default=[0, 1], help="used gpu")
-parser.add_argument("--logdir", type=str, help="relative log directory")
-parser.add_argument("--model_type", type=str, help="type of model (m1, m2, m3)")
-parser.add_argument("--indir", type=str, help="test image dir")
-parser.add_argument("--savedir", type=str, help="result save dir (default = log dir)")
-args = parser.parse_args()
-
-# python script/pretrained.py --gpu_id 1 --logdir logs/transformer_seq2seq_feedback/20230116-115230/policy.pth --model_type m2 --indir dataset/real/dust.jpg
-
+import torch
+import numpy as np
+import cv2
 
 from config.config import Config
-from language4contact.utils import *
-
-if args.model_type == 'm1':
-    from language4contact.modules_gt import policy
-elif args.model_type == 'm2':
-    from language4contact.modules_seq import policy
-elif args.model_type == 'm3':
-    from language4contact.modules_gt import policy
+from language4contact.utils import round_mask, union_img, overlay_cnt_rgb, seq_overlay_cnt_rgb
 
 class PretrainedPolicy:
     def __init__(self, logdir, model_type, save_result = False):
         # class variable
         self.Config = Config()
         self.model_type = model_type
+
+        if model_type == 'm1':
+            from language4contact.modules_gt import policy
+        elif model_type == 'm2':
+            from language4contact.modules_seq import policy
+        elif model_type == 'm3':
+            from language4contact.modules_gt import policy
+
+
         self.save_result = save_result
 
         # Load model from log.
@@ -84,11 +77,6 @@ class PretrainedPolicy:
         w_st = (h - w) // 2
         img = img[:,w_st:w_st+w,: ]
 
-        # img = self.policy_pt.explainability.preprocess(Image.open(rgb_path[0])).to(
-        #     self.Config.device
-        # )
-        # img = img.permute(1,2,0)*255.
-        # img = img.detach().cpu().numpy()
 
         if self.model_type == 'm2':
             contact_ovl = seq_overlay_cnt_rgb(rgb_path[0], cost_reg_ori_[0].detach().cpu(), rgb=img)
@@ -110,11 +98,3 @@ class PretrainedPolicy:
 
             return contact_goal
 
-        # energy_reg, cost_reg_ori = energy_regularization(cost.detach().cpu(), cost_reg_ori_.detach().cpu(), minmax = (0,2.5), return_original = True)
-
-
-
-if __name__ == "__main__":
-    m = PretrainedPolicy(args.logdir, args.model_type)
-    energy_reg = m.feedforward([args.indir], "Use the sponge to clean up the dirt.")
-    # cv2.imwrite("energy_reg.png", energy_reg.numpy() * 255.0)

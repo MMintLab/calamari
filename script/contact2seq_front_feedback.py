@@ -1,23 +1,13 @@
-import time
 from argparse import ArgumentParser
 from datetime import datetime
 
-import cv2
-import torch
-import torch.nn as nn
 from tqdm import tqdm
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import tensorflow as tf
 
 from language4contact.utils import *
 from language4contact.modules_seq import  policy
 from config.config import Config
 from language4contact.dataset import DatasetSeq_front_feedback as Dataset
 from torch.utils.data import DataLoader
-import language4contact.loss
-
 
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")

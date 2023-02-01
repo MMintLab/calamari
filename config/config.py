@@ -1,5 +1,7 @@
 import itertools
 import json
+import os.path
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -37,7 +39,9 @@ class Config:
         self.g_mat = self.get_gamma_mat()
 
         ## Different Frames ##
-        self.camera_config = json.load(open('dataset/config/camera_config.json', 'r'))
+        json_path = os.path.join(Path( os.path.dirname(__file__)).parents[0],
+                                  'dataset/config/camera_config.json')
+        self.camera_config = json.load(open(json_path, 'r'))
         R = np.array(self.camera_config["RT"])[:3,:3]
         
         intrinsics = np.array(self.camera_config["K"])

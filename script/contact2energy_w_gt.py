@@ -1,22 +1,13 @@
-import time
 from argparse import ArgumentParser
 from datetime import datetime
 
-import cv2
-import torch
-import torch.nn as nn
 from tqdm import tqdm
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import tensorflow as tf
 
 from language4contact.utils import *
 from modules_gt import policy
 from config.config import Config
 from dataset import DatasetSeq_front_gt as Dataset
 from torch.utils.data import DataLoader
-import loss
 
 TXT  = "Use the sponge to clean up the dirt."
 parser = ArgumentParser()

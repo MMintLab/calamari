@@ -1,15 +1,7 @@
-import time
 from argparse import ArgumentParser
 from datetime import datetime
 
-import cv2
-import torch
-import torch.nn as nn
 from tqdm import tqdm
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import tensorflow as tf
 
 from language4contact.utils import *
 from language4contact.modules_gt import policy

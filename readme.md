@@ -13,6 +13,7 @@ pip install -e .
 
 ## Clone Package
 ```angular2html
-git clone https://github.com/hila-chefer/Transformer-MM-Explainability.git
+git submodule add -f https://github.com/hila-chefer/Transformer-MM-Explainability.git Transformer_MM_Explainability
+# git clone https://github.com/hila-chefer/Transformer-MM-Explainability.git
 ```
 
