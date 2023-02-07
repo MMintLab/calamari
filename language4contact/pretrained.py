@@ -22,7 +22,7 @@ class PretrainedPolicy:
         self.save_result = save_result
 
         # Load model from log.
-        pretrained = torch.load(logdir)
+        pretrained = torch.load(logdir, map_location = torch.device('cpu'))
 
         for ln, w in pretrained["transformer_decoder"].items():
             if ln == "l3_1.weight":
@@ -48,8 +48,10 @@ class PretrainedPolicy:
         )
 
 
-    def feedforward(self, rgb_path, txt) -> torch.tensor:
-        feat, seg_idx = self.policy_pt.input_processing(rgb_path, txt)
+    def feedforward(self, rgb, txt, return_heatmaps = True) -> torch.tensor:
+        if return_heatmaps:
+            feat, seg_idx, heatmaps, img_processed = self.policy_pt.input_processing(rgb, txt, return_heatmaps = True)
+
         contact_goal = {}
         if self.model_type == 'm1' :
             contact, cost, vel, out = self.policy_pt(feat, seg_idx)
@@ -67,34 +69,38 @@ class PretrainedPolicy:
 
         elif self.model_type == 'm3':
             contact, _, _, out = self.policy_pt(feat, seg_idx)
-            cost_reg_ori_ = round_mask(contact[0].detach().cpu()).unsqueeze(2)
+            cost_reg_ori = round_mask(contact[0].detach().cpu())
+
+            cost_reg_ori_ = cost_reg_ori .unsqueeze(2)
             cost_reg_ori_ = torch.dstack([cost_reg_ori_, cost_reg_ori_, cost_reg_ori_])
-            contact_goal ["contact"] = contact.detach().cpu().numpy()
+
+            contact_goal["contact"] = cost_reg_ori_.numpy() * 255.
+            cv2.imwrite("m3_raw_goal.png", contact_goal["contact"])
+
         
-        img = cv2.imread(rgb_path[0])
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[:,:,:3]
+        # img = cv2.imread(rgb_path[0])
+        img = cv2.cvtColor(rgb[0], cv2.COLOR_BGR2RGB)[:,:,:3]
         w, h, _ = img.shape
         w_st = (h - w) // 2
         img = img[:,w_st:w_st+w,: ]
 
 
         if self.model_type == 'm2':
-            contact_ovl = seq_overlay_cnt_rgb(rgb_path[0], cost_reg_ori_[0].detach().cpu(), rgb=img)
+            contact_ovl = seq_overlay_cnt_rgb(None, cost_reg_ori_[0].detach().cpu(), rgb=img)
             cv2.imwrite("contact_ori.png", cost_reg_ori_[0].detach().cpu().numpy()[:,:,[2,1,0]] *255. )
             cv2.imwrite("contact.png", contact_ovl.numpy()[:,:,[2,1,0]] )
             return contact_ovl
 
         elif self.model_type == 'm2':
-            contact_ovl = overlay_cnt_rgb(rgb_path[0], cost_reg_ori_, rgb_image=img)
+            contact_ovl = overlay_cnt_rgb(None, cost_reg_ori_, rgb_image=img)
             cv2.imwrite("contact_ori.png", contact[0].detach().cpu().numpy() * 255.0)
             cv2.imwrite("contact.png", contact_ovl.numpy()[:,:,[2,1,0]] )
             return contact_ovl
 
         elif self.model_type == 'm3':
-            contact_ovl = overlay_cnt_rgb(rgb_path[0], cost_reg_ori_, rgb_image=img)
-            cv2.imwrite("contact_ori.png", contact[0].detach().cpu().numpy() * 255.0)
-            cv2.imwrite("contact.png", contact_ovl.numpy()[:,:,[2,1,0]] )
+            contact_ovl = overlay_cnt_rgb(None, cost_reg_ori_, rgb_image=img)
             contact_goal["contact_ovl"] = contact_ovl.numpy()
-
+            if return_heatmaps:
+                return contact_goal, heatmaps, img_processed
             return contact_goal
 

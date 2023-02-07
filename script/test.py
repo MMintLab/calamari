@@ -68,9 +68,7 @@ class PretrainedPolicy:
             w = int(np.sqrt(contact.shape[-1]))
             contact = contact.reshape( -1, w, w)
             contact = contact[:4, :, :] 
-            print(torch.amax(contact))
             cost_reg_ori_ = union_img(contact.detach().cpu())
-            print(contact.shape)
 
         elif self.model_type == 'm3':
             contact, _, _, out = self.policy_pt(feat, seg_idx)

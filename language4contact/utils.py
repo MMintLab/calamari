@@ -280,7 +280,7 @@ def extract_cnt_pxls(img):
     pts = np.stack([jidx, iidx], axis = 1)
     return pts
 
-def round_mask(img):
+def round_mask(img, thres = 0.5):
     ones = torch.ones_like(img)
     zeros = torch.zeros_like(img)
 
@@ -356,24 +356,24 @@ def  overlay_cnt_rgb(rgb_path, uib, uic, Config):
         cnt_pts = Config.contact_frame_to_world(cnt_pxls) # project from desk to front camera image space
         
         ## convert 3D Cartesian world coordinates to 2D image coordinates        
-        mapped = Config.world_to_camera(cnt_pts)
+        idx = Config.world_to_camera(cnt_pts)
 
         ## idx =  (iidx , jidx) converted to camera frame
-        idx = mapped[:2, :] / mapped[2, :]
-        idx = np.round(idx).astype(int)
-        idx = np.clip(idx, 0, 255)
+        # idx = mapped[:2, :] / mapped[2, :]
+        # idx = np.round(idx).astype(int)
+        # idx = np.clip(idx, 0, 255)
         
         ## contact map in camera frame
         overlaid = copy.copy(rgb)
 
         ## extract contact color from original contact map (indicate contact order)
         mapped_cnt = uic[cnt_pxls[:,1],cnt_pxls[:,0],:]
-        overlaid[ idx[1,:], idx[0,:] ,:] = mapped_cnt * 255.
+        overlaid[ idx[:,1], idx[:,0] ,:] = mapped_cnt * 255.
 
     return torch.tensor(overlaid)
 
 
-def  overlay_cnt_rgb(rgb_path, cnt_pred, rgb_image = None):
+def  overlay_cnt_rgb(rgb_path, cnt_pred, rgb_image = None) -> torch.tensor:
     ## open rgb image with cv2
     if rgb_image is None:
         rgb = cv2.imread(rgb_path)
@@ -386,11 +386,13 @@ def  overlay_cnt_rgb(rgb_path, cnt_pred, rgb_image = None):
     if rgb.shape[0] != cnt_pred.shape[0]:
         rgb = cv2.resize(rgb, cnt_pred.shape[:2])
 
-
-    uic = cnt_pred.squeeze().detach().cpu().numpy()
+    if torch.is_tensor(cnt_pred):
+        uic = cnt_pred.squeeze().detach().cpu().numpy()
+    else:
+        uic = copy.copy(cnt_pred)
 
     iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
-    rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
+    rgb[iidx, jidx,:] = uic[iidx, jidx,:] / np.amax(uic) * 255.
     return torch.tensor(rgb)
 
 def seq_overlay_cnt_rgb(rgb_path, cnt_pred, rgb=None):
@@ -402,7 +404,6 @@ def seq_overlay_cnt_rgb(rgb_path, cnt_pred, rgb=None):
         rgb = cv2.resize(rgb, cnt_pred.shape[:2])
 
     # uic = union_img(cnt_pred.squeeze())
-    print(cnt_pred.shape)
     uic = cnt_pred.numpy()
     iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
     rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.

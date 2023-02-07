@@ -168,19 +168,19 @@ class ContactEnergy():
         cnt_pts = self.Config.contact_frame_to_world(cnt_pxls) # project from desk to front camera image space
         
         ## convert 3D Cartesian world coordinates to 2D image coordinates        
-        mapped = self.Config.world_to_camera(cnt_pts)
+        idx = self.Config.world_to_camera(cnt_pts)
 
         ## idx =  (iidx , jidx) converted to camera frame
-        idx = mapped[:2, :] / mapped[2, :]
-        idx = np.round(idx).astype(int)
-        idx = np.clip(idx, 0, 255)
+        # idx = mapped[:2, :] / mapped[2, :]
+        # idx = np.round(idx).astype(int)
+        # idx = np.clip(idx, 0, 255)
         
         ## contact map in camera frame
         cnt_mp = copy.copy(rgb)
 
         ## extract contact color from original contact map (indicate contact order)
         mapped_cnt = uic[cnt_pxls[:,1],cnt_pxls[:,0],:]
-        cnt_mp[ idx[1,:], idx[0,:] ,:] = mapped_cnt * 255.
+        cnt_mp[ idx[:,1], idx[:,0] ,:] = mapped_cnt * 255.
 
 
         overlaid = cnt_mp

@@ -34,9 +34,14 @@ class ClipExplainability(nn.Module):
         ## image processing
         txt_emb_batch = []
         heatmaps_batch = []
+        img_batch = []
 
         for img_pth in img_pths:
-            img = self.preprocess(Image.open(img_pth)).to(self.device)
+            if type(img_pth) == str:
+                img = Image.open(img_pth)
+            else:
+                img = Image.fromarray(img_pth)
+            img = self.preprocess(img).to(self.device)
             R_text, R_image, txt_emb = self.interpret(model=self.model, image=img, texts=text, device=self.device)
             batch_size = text.shape[0]
 
@@ -44,16 +49,12 @@ class ClipExplainability(nn.Module):
             for i in range(batch_size):
                 heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
                 heatmaps.append(heatmap)
-                # print(heatmap)
-                # heatmap_sv = heatmap / torch.amax(heatmap) * 100.0
-                # heatmap_sv = heatmap_sv.unsqueeze(2).type(torch.int8)
-                # cv2.imwrite(f"hm_{i}.png",  heatmap_sv.detach().cpu().numpy())
-
 
             txt_emb_batch.append(txt_emb)
             heatmaps_batch.append( torch.stack(heatmaps))
+            img_batch.append(img)
 
-        return txt_emb, torch.stack(heatmaps_batch)
+        return txt_emb, torch.stack(heatmaps_batch), torch.stack(img_batch)
 
 
     def show_image_relevance(self, image_relevance, image, orig_image):

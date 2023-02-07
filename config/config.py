@@ -56,14 +56,84 @@ class Config:
         
         self.tab_scale = (110,110)
         self.tab_offset = (0.4, 0.6)
-        self.table_h = 0.75 #496
+        self.table_h = 0.5 #496
 
     def world_to_camera(self, cnt_pts):
         cnt_pts_ = np.ones((4, cnt_pts.shape[0]))
         cnt_pts_[:3, :] = cnt_pts.T
 
         front_img = self.camera_proj @ cnt_pts_
+        front_img =front_img[:2, :] / front_img[2, :]
+        front_img = np.round(front_img).astype(int)
+        front_img = np.clip(front_img, 0, 255)
+        front_img = front_img.transpose(1, 0)
         return front_img
+
+    def world_to_camera_batch(self, cnt_pts: torch.tensor, mask: torch.tensor ,img_size: list) -> np.ndarray:
+        '''
+        :param cnt_pts: Padded pointcloud (B, N, 3). Zero rgb value for null points
+        '''
+
+        assert len(cnt_pts.shape) == 3
+        B, N, _ = cnt_pts.shape
+        cnt_pts_ = torch.ones((B, 4, N))
+        cnt_pts_[:, :3, :] = cnt_pts.transpose(2, 1)
+
+        front_pxls = torch.tensor(self.camera_proj).to(self.device).float() @ torch.tensor(cnt_pts_).to(self.device).float()
+        front_pxls = front_pxls[:, :2, :] / front_pxls[:, 2, :].unsqueeze(1)
+        front_pxls = torch.round(front_pxls)
+        front_pxls = torch.clip(front_pxls, 0, 255)
+        front_pxls = front_pxls.transpose(2, 1).long()
+        # front_pxls = front_pxls.detach().cpu().numpy()
+
+        imgs = torch.zeros(img_size).to(self.device)
+        for b in range(B):
+            iidx, _ = torch.where( mask[b, :, :] == torch.ones_like(mask[b, :, :]))
+            torch.ones_like(front_pxls[b, iidx, 0]).to(self.device)
+            imgs[ b, front_pxls[b,iidx,1], front_pxls[b,iidx,0]] = torch.ones_like(front_pxls[b,iidx,0]).to(self.device).float()
+        return imgs.detach().cpu().numpy()
+
+
+
+
+    # def _transform(self, coords, trans):
+    #     h, w = coords.shape[:2]
+    #     coords = np.reshape(coords, (h * w, -1))
+    #     coords = np.transpose(coords, (1, 0))
+    #     transformed_coords_vector = np.matmul(trans, coords)
+    #     transformed_coords_vector = np.transpose(
+    #         transformed_coords_vector, (1, 0))
+    #     return np.reshape(transformed_coords_vector,
+    #                       (h, w, -1))
+    # def _pixel_to_world_coords(self, pixel_coords, cam_proj_mat_inv):
+    #     h, w = pixel_coords.shape[:2]
+    #     pixel_coords = np.concatenate(
+    #         [pixel_coords, np.ones((h, w, 1))], -1)
+    #     world_coords = self._transform(pixel_coords, cam_proj_mat_inv)
+    #     world_coords_homo = np.concatenate(
+    #         [world_coords, np.ones((h, w, 1))], axis=-1)
+    #     return world_coords_homo
+    # def camera_to_world(self, img_cnt_pts):
+    #
+    #     cnt_pts_ = np.ones((3, img_cnt_pts.shape[0]))
+    #     cnt_pts_[:2, :] = img_cnt_pts.T
+    #
+    #
+    #     print(cnt_pts_.shape)
+    #     cam_proj_mat_homo = np.concatenate(
+    #         [self.camera_proj, [np.array([0, 0, 0, 1])]])
+    #     cam_proj_mat_inv = np.linalg.inv(cam_proj_mat_homo)[0:3]
+    #     world_coords_homo = np.expand_dims(self._pixel_to_world_coords(
+    #         pc, cam_proj_mat_inv), 0)
+    #
+    #     world_coords = world_coords_homo[..., :-1][0]
+    #
+    #     world_pts = np.linalg.pinv( self.camera_proj) @ cnt_pts_
+    #     world_pts = world_pts / np.mean(world_pts[3,:])
+    #     world_pts = world_pts.T
+    #     print("world pts", world_pts)
+    #     return world_pts[:,:3]
+
 
     def contact_frame_to_world(self, cnt_pxls):
         ## cnt_pxls = N x 2 where N  = contact points, 2 = i , j
