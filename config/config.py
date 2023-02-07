@@ -79,7 +79,7 @@ class Config:
         cnt_pts_ = torch.ones((B, 4, N))
         cnt_pts_[:, :3, :] = cnt_pts.transpose(2, 1)
 
-        front_pxls = torch.tensor(self.camera_proj).to(self.device).float() @ torch.tensor(cnt_pts_).to(self.device).float()
+        front_pxls = torch.tensor(self.camera_proj).to(self.device).float() @ cnt_pts_.clone().detach().to(self.device).float()
         front_pxls = front_pxls[:, :2, :] / front_pxls[:, 2, :].unsqueeze(1)
         front_pxls = torch.round(front_pxls)
         front_pxls = torch.clip(front_pxls, 0, 255)
@@ -90,7 +90,7 @@ class Config:
         for b in range(B):
             iidx, _ = torch.where( mask[b, :, :] == torch.ones_like(mask[b, :, :]))
             torch.ones_like(front_pxls[b, iidx, 0]).to(self.device)
-            imgs[ b, front_pxls[b,iidx,1], front_pxls[b,iidx,0]] = torch.ones_like(front_pxls[b,iidx,0]).to(self.device).float()
+            imgs[ b, front_pxls[b,iidx,0], front_pxls[b,iidx,1]] = torch.ones_like(front_pxls[b,iidx,0]).to(self.device).float()
         return imgs.detach().cpu().numpy()
 
 

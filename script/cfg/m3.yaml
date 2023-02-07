@@ -1,0 +1,3 @@
+logdir: "/home/youngsun/Desktop/Research/l4c/l4c_rlbench/script/model/m3/policy.pth"
+model_type : "m3"
+task: "WipeDesk"
