@@ -1,5 +1,7 @@
 import numpy as np
 import imageio
+from typing import List
+
 import copy
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -408,3 +410,8 @@ def seq_overlay_cnt_rgb(rgb_path, cnt_pred, rgb=None):
     iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
     rgb[iidx, jidx,:] = uic[iidx, jidx,:] * 255.
     return torch.tensor(rgb)
+
+def sentence2words(s) -> List[str]:
+    s = s.replace('.', '')
+    words = s.split(' ')
+    return words

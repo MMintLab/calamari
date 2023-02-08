@@ -13,6 +13,7 @@ from PIL import Image
 from .Transformer_MM_Explainability.CLIP.clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from .Transformer_MM_Explainability.CLIP import clip 
 from language4contact.modules_shared import *
+import language4contact.utils as utils
 from functools import partial
 from typing import Any, Callable, List, Optional, Type, Union
 from .resnet import ResNet, ResidualBlock
@@ -43,7 +44,27 @@ class policy(nn.Module):
         ## Transformer Decoder
         self.transformer_decoder = contact_mlp_decoder(self.dim_ft, dim_out = dim_out).to(self.device)
 
+    def input_processing_from_heatmap(self, heatmap_folder:str, sentence: List[str]):
+        ## Encode image and texts with CLIP
+        heatmaps = []
+        texts = utils.sentence2words(sentence)
+        print("texts", texts)
+        for txt in texts:
+            img_path = os.path.join(heatmap_folder, txt + ".png")
+            heatmaps.append(Image.open(img_path)) 
+        heatmaps = torch.stack(heatmaps)
+        # txt_emb, heatmaps = self.explainability.get_heatmap(img, texts)
+        seg_idx = [0]
+        hm_emb = []
 
+        ## Get clip attention
+        img_enc_inp = torch.flatten(heatmaps, 0, 1).unsqueeze(1).float()
+        inp = self._image_encoder(img_enc_inp)
+        inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
+        seg_idx += [1] * inp.shape[1]
+        seg_idx = torch.tensor(seg_idx).repeat(inp.shape[0]).to(self.device)
+
+        return inp, seg_idx
 
     def input_processing(self, img, texts):
         ## Encode image and texts with CLIP
