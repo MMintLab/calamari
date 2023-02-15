@@ -71,6 +71,8 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         txt  = "Use the sponge to clean up the dirt."
+        # txt  = "sponge sponge dirt dirt dirt."
+
 
         demo_idx, local_idx = self.data_summary['tot_rgb_index'][idx] # convert to actual index by train/test
         folder_path  =  Path(self.data_summary['tot_rgb_flat'][idx]).parent.parent
@@ -80,11 +82,13 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         traj_rgb_lst = folder2filelist(traj_rgb_path)
         traj_rgb_lst.sort()
 
-        # Get heatmaps.
-        heatmap_folder =  traj_rgb_path.replace('rgb','heatmap')
-
+        # get RGB image path for batch
         options = self._get_idxs_from_fns(traj_rgb_lst[local_idx:])
         traj_rgb_lst = traj_rgb_lst[local_idx]
+
+
+        # Get heatmaps.
+        heatmap_folders =  traj_rgb_lst.replace('rgb/','heatmap_cont/').replace('.png','')
 
         traj_cnt_path = os.path.join(os.path.join( folder_path), self.contact_folder )
         traj_cnt_fn_all = folder2filelist(traj_cnt_path)
@@ -111,7 +115,7 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
                     "traj_cnt_lst": traj_cnt_lst, 
                     "mask_t": mask_t, 
                     "idx": idx, 
-                    "heatmap_folder": heatmap_folder, 
+                    "heatmap_folder": heatmap_folders, 
                     "txt": txt}
 
 

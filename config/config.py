@@ -27,7 +27,7 @@ class Config:
 
         self.B = 40
         self.device = 'cuda'
-        self.dim_ft = 64 # 32
+        self.dim_ft = 512 # 32
         self.seed = 42
         self.len = 70 # number of training data
 

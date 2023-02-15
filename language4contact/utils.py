@@ -286,8 +286,8 @@ def round_mask(img, thres = 0.5):
     ones = torch.ones_like(img)
     zeros = torch.zeros_like(img)
 
-    img  = torch.where(img > 0.8, ones, zeros)
-    return img
+    img_  = torch.where(img > thres, ones, zeros)
+    return img_
 
 
 # union of list of image array
@@ -299,16 +299,21 @@ def union_img_binary(img_lst):
     return img
 
 # union of list of image array
-def union_img(img_lst):
+def union_img(img_lst, thres = 0.5):
+    img_lst = round_mask(img_lst, thres = 0.5)
+    _, iidx, jidx = np.where(img_lst == 1.)
+    # print( torch.amax(img_lst, dim = 0), len(iidx))
 
     img = torch.zeros_like(img_lst[0])
     for idx, i in enumerate(img_lst):
         new = torch.ones_like(img_lst[0]) * (len(img_lst) - idx) / len(img_lst)
-        img  = np.where(i > 0.5, new, img)
+        img  = np.where(i > thres, new, img)
+        # print(idx, len( np.where(img == 0)[0]))
     
     img_color = energy_regularization(img, minmax= (0,1))
     # mask out zeros for visualization
     iidx, jidx = np.where(img == 0.)
+    # print(len(iidx))
     img_color[:, iidx, jidx, :] = 0
     return img_color
 
@@ -394,6 +399,7 @@ def  overlay_cnt_rgb(rgb_path, cnt_pred, rgb_image = None) -> torch.tensor:
         uic = copy.copy(cnt_pred)
 
     iidx, jidx = np.where( np.sum(uic, axis = -1) != 0)
+    # print(rgb.shape, uic.shape)
     rgb[iidx, jidx,:] = uic[iidx, jidx,:] / np.amax(uic) * 255.
     return torch.tensor(rgb)
 
@@ -415,3 +421,12 @@ def sentence2words(s) -> List[str]:
     s = s.replace('.', '')
     words = s.split(' ')
     return words
+
+def image_reg_255(img: torch.tensor):
+    '''
+    regularize image with scale 0~255 to have mean 0 max 0.5
+    '''
+    # Do regularization for 0-255 scale images
+    img = img / 125 - 1.0 * torch.ones_like(img)
+    return img*3
+

@@ -26,6 +26,13 @@ def generate_heatmap(
     :param  img np.nparray (0~255.)
     """
     img = np.array(imageio.imread(file_path))
+    save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])
+    if not os.path.exists(save_folder_):
+        os.mkdir(save_folder_) 
+    else:
+        print(save_folder_, "exists")
+        return
+
     assert img.dtype == np.uint8
     h, w, c = img.shape
     start = time()
@@ -40,9 +47,9 @@ def generate_heatmap(
     grads = grads.cpu().numpy()
     fig, axes = plt.subplots(3, 3)
     axes = axes.flatten()
-    vmin = 0.002
+    vmin = 0.000
     # cmap = plt.get_cmap("jet")
-    vmax = 0.008
+    vmax = 0.020
     for ax, label_grad, label in zip(axes, grads, labels):
         ax.axis("off")
         ax.imshow(img)
@@ -54,8 +61,7 @@ def generate_heatmap(
         # ax.imshow(colored_grad)
         # I8 = (grad).astype(np.uint8)
         img = Image.fromarray(np.uint8(grad*255))
-        save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])
-        os.mkdir(save_folder_) if not os.path.exists(save_folder_) else print("path exist:", save_folder)
+        print(save_folder_)
         img.save(os.path.join(save_folder_,f"{label}.png"))
 
 if __name__ == '__main__':
@@ -63,17 +69,20 @@ if __name__ == '__main__':
     keywords = ["Use","the", "sponge" ,"to" ,"clean" ,"up", "the" ,"dirt"]
     data_origrin = "dataset/keyframes"
     trial_folder = os.listdir(data_origrin)
+    trial_folder.sort()
+
     dir_list = []
     for tf in trial_folder:
         data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap')
+        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_cont')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 
         else:
-            continue
+            pass
         
         data_files = [os.path.join(data_origrin, tf, 'rgb',f) for f in os.listdir(data_folder_i)]
+        data_files.sort()
 
         for fn in data_files:
             generate_heatmap(file_path = fn, labels = keywords, save_folder = save_folder_i, prompts=["a picture of a {}."] )

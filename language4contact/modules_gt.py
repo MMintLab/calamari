@@ -50,7 +50,7 @@ class policy(nn.Module):
 
     def input_processing(self, img, texts, return_heatmaps=False):
         ## Encode image and texts with CLIP
-        txt_emb, heatmaps, _ = self.explainability.get_heatmap(img, texts)
+        txt_emb, heatmaps = self.explainability.get_heatmap(img, texts)
         seg_idx = [0]
         hm_emb = []
 
@@ -64,7 +64,7 @@ class policy(nn.Module):
         seg_idx = torch.tensor(seg_idx).repeat(inp.shape[0]).to(self.device)
 
         if return_heatmaps:
-            return inp, seg_idx, heatmaps, _
+            return inp, seg_idx, heatmaps, 0
         return inp, seg_idx
 
     def forward(self, feat=None, seg_idx=None, img=None, texts=None):

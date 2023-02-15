@@ -41,7 +41,8 @@ class ContactEnergy():
 
         ## Define policy model
         dimout = train_dataset.cnt_w * train_dataset.cnt_h
-        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_out= dimout).cuda()
+
+        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_in = train_dataset.cnt_w , dim_out= dimout).cuda()
         if  len(args.gpu_id) > 1:
             self.policy.transformer_encoder = nn.DataParallel(self.policy.transformer_encoder)
             self.policy._image_encoder = nn.DataParallel(self.policy._image_encoder)
@@ -111,11 +112,10 @@ class ContactEnergy():
             l = data["idx"]
             rgb = data['traj_rgb']
             txt = data['txt'][0]
-            heatmap_folder = data['heatmap_folder'][0]
+            heatmap_folder = data['heatmap_folder']
 
             traj_cnt_lst = data['traj_cnt_lst'] #([B, input_length, img_w, img_h])
             _, l_inp, c_img_w, c_img_h = traj_cnt_lst.shape
-
 
             feat, seg_idx =  self.policy.input_processing_from_heatmap(heatmap_folder, txt)
             contact_seq = self.policy(feat, seg_idx).reshape(-1, c_img_w, c_img_h)
@@ -178,15 +178,16 @@ class ContactEnergy():
 
             self._initialize_loss(mode = 'a')
 
-            contact_histories = [0] * 2000 #self.train_dataLoader.__len__()
-            contact_histories_ovl = [0] * 2000 #self.train_dataLoader.__len__()
+            N = 200
+            contact_histories = [0 for _ in range(N)] #self.train_dataLoader.__len__()
+            contact_histories_ovl = [0 for _ in range(N)]  #self.train_dataLoader.__len__()
 
             tot_loss = 0
             l_i_hist = []
 
             for data in self.train_dataLoader:
                 txt = data['txt'][0]
-                heatmap_folder = data['heatmap_folder'][0]
+                heatmap_folder = data['heatmap_folder']
                 l = data["idx"]
                 rgb = data['traj_rgb']
                 traj_cnt_lst = data['traj_cnt_lst'] #([B, input_length, img_w, img_h])
@@ -194,21 +195,24 @@ class ContactEnergy():
 
 
                 feat, seg_idx =  self.policy.input_processing_from_heatmap(heatmap_folder, txt)
-                contact_seq = self.policy(feat, seg_idx)
+                feat_ = feat.reshape(len(l), -1, self.Config.dim_ft)
+                contact_seq = self.policy(feat_, seg_idx)
+
+
                 contact_seq = contact_seq.reshape(len(l), -1, c_img_w, c_img_h)
                 contact_seq = contact_seq[:, :traj_cnt_lst.shape[1], :, :]
 
-        
                 # loss
                 loss0_i = torch.norm( traj_cnt_lst.to(self.Config.device).squeeze() - contact_seq.squeeze(), p =2) / ( 150 **2 *l_inp )
                 loss0_i = 1e6 * loss0_i
+
                 self.optim.zero_grad()
                 loss0_i.backward()
                 self.optim.step()
 
 
                 for l_ir, l_i in enumerate(l):
-                    if l_i < 2000: 
+                    if l_i < N: 
                         contact_histories[l_i] = union_img(contact_seq[l_ir].detach().cpu())
                         contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb[l_ir], contact_seq[l_ir].detach().cpu())
                         l_i_hist.append(l_i)

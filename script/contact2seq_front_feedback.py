@@ -42,7 +42,7 @@ class ContactEnergy():
 
         ## Define policy model
         dimout = train_dataset.cnt_w * train_dataset.cnt_h
-        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_out= dimout).cuda()
+        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_in = train_dataset.cnt_w, dim_out= dimout).cuda()
         if  len(args.gpu_id) > 1:
             self.policy.transformer_encoder = nn.DataParallel(self.policy.transformer_encoder)
             self.policy._image_encoder = nn.DataParallel(self.policy._image_encoder)
@@ -117,7 +117,7 @@ class ContactEnergy():
 
 
             feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-            contact_seq = self.policy(feat, seg_idx).reshape(-1, c_img_w, c_img_h)
+            contact_seq = self.policy(feat, seg_idx).permute((1,0,2)).reshape(-1, c_img_w, c_img_h)
             contact_seq = contact_seq[:traj_cnt_lst.shape[1], :, :]
 
             contact_histories.append( union_img( contact_seq.detach().cpu()) )
@@ -177,8 +177,9 @@ class ContactEnergy():
 
             self._initialize_loss(mode = 'a')
 
-            contact_histories = [0] * 2000 #self.train_dataLoader.__len__()
-            contact_histories_ovl = [0] * 2000 #self.train_dataLoader.__len__()
+            N = 200
+            contact_histories = [0 for _ in range(N)] #self.train_dataLoader.__len__()
+            contact_histories_ovl = [0 for _ in range(N)]  #self.train_dataLoader.__len__()
 
             tot_loss = 0
             l_i_hist = []
@@ -191,8 +192,9 @@ class ContactEnergy():
 
 
                 feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-                contact_seq = self.policy(feat, seg_idx)
-                contact_seq = contact_seq.reshape(len(l), -1, c_img_w, c_img_h)
+                contact_seq = self.policy(feat, seg_idx).permute((1,0,2))
+                # print(contact_seq.shape)
+                contact_seq = contact_seq.reshape(contact_seq.shape[0], contact_seq.shape[1], c_img_w, c_img_h)
                 contact_seq = contact_seq[:, :traj_cnt_lst.shape[1], :, :]
 
         
@@ -205,7 +207,7 @@ class ContactEnergy():
 
 
                 for l_ir, l_i in enumerate(l):
-                    if l_i < 2000: 
+                    if l_i < N: 
                         contact_histories[l_i] = union_img(contact_seq[l_ir].detach().cpu())
                         contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb[l_ir], contact_seq[l_ir].detach().cpu())
                         l_i_hist.append(l_i)

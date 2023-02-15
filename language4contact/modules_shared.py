@@ -54,7 +54,7 @@ class ClipExplainability(nn.Module):
             heatmaps_batch.append( torch.stack(heatmaps))
             img_batch.append(img)
 
-        return txt_emb, torch.stack(heatmaps_batch), torch.stack(img_batch)
+        return txt_emb, torch.stack(heatmaps_batch)
 
 
     def show_image_relevance(self, image_relevance, image, orig_image):
@@ -140,11 +140,36 @@ class ClipExplainability(nn.Module):
 
         return text_relevance, image_relevance, txt_emb
 
+class image_encoder_mlp(nn.Module):
+    def __init__(self, device, dim_in=16*16, dim_out = 10):
+        super(image_encoder_mlp, self).__init__()
+        self.l1 = nn.Linear(dim_in, 256)
+        # self.l2 = nn.Linear(256, 256)
+        self.l3 = nn.Linear(256, dim_out)
+
+        nn.init.kaiming_normal_(
+            self.l1.weight, a=0.0, nonlinearity="relu", mode="fan_in"
+        )
+        # nn.init.kaiming_normal_(
+        #     self.l2.weight, a=0.0, nonlinearity="relu", mode="fan_in"
+        # )
+        nn.init.kaiming_normal_(
+            self.l3.weight, a=0.0, nonlinearity="relu", mode="fan_in"
+        )
+
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.relu(self.l1(x))
+        # x = self.relu(self.l2(x))
+        x = self.l3(x)
+        return x
+
 
 class image_encoder(nn.Module):
-    def __init__(self, device, dim_out):
+    def __init__(self, device, dim_in=224, dim_out = 10):
         super(image_encoder, self).__init__()
-        self.enc1 = ResNet(ResidualBlock, [1, 1, 1, 1 ], dim_out=dim_out).to(device)
+        self.enc1 = ResNet(ResidualBlock, [1, 1, 1, 1 ], inplanes = dim_in, dim_out=dim_out).to(device)
     def forward(self, x):
         x = self.enc1(x)
         return x
@@ -161,7 +186,7 @@ class position_encoding_simple(nn.Module):
             M: int representing embedding dimension for the sequence
 
         return:
-            y: a Tensor of shape (1, K, M)
+            y: a Tensor of shape (K, B,M)
         """
         super().__init__()
         self.K = K
@@ -171,8 +196,8 @@ class position_encoding_simple(nn.Module):
     def forward(self,x):
 
         n = torch.arange(0, self.K)
-        y_i = (n/self.K).view(1,-1,1)
-        y = y_i.repeat(1,1,self.M) * 0.001
+        y_i = (n/self.K).view(-1,1,1)
+        y = y_i.repeat(1,x.shape[1],self.M) * 0.01
         x = x + y.to(self.device)
         return x
 

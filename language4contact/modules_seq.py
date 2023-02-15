@@ -1,6 +1,7 @@
 import os
 import torch
 import math
+import time
 
 from torch import nn
 import numpy as np
@@ -19,7 +20,7 @@ from typing import Any, Callable, List, Optional, Type, Union
 from .resnet import ResNet, ResidualBlock
 
 class policy(nn.Module):
-    def __init__(self, device, dim_ft, dim_out):
+    def __init__(self, device, dim_ft, dim_in, dim_out, image_size = 255):
         super(policy, self).__init__()
         self.dim_ft = dim_ft
         self.device = device
@@ -27,7 +28,11 @@ class policy(nn.Module):
 
         ## Input processing for Transformer
         self.explainability = ClipExplainability(self.device)
-        self._image_encoder = image_encoder(self.device, dim_out = self.dim_ft)
+        # self._image_encoder = image_encoder(self.device, dim_in = dim_in, dim_out = self.dim_ft)
+        # self.dim_in = 56
+        # self._image_encoder = image_encoder_mlp(self.device, dim_in = self.dim_in **2 , dim_out = self.dim_ft)
+        self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = self.dim_ft)
+
 
         ## Transformer Encoder
         self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=50).to(self.device)
@@ -44,30 +49,75 @@ class policy(nn.Module):
         ## Transformer Decoder
         self.transformer_decoder = contact_mlp_decoder(self.dim_ft, dim_out = dim_out).to(self.device)
 
+    def image_segment(self, pil_img, patch_size = 32):
+        patches = pil_img.unfold(1, patch_size, patch_size).unfold(2, patch_size, patch_size)
+        patches = patches.reshape( -1, patch_size, patch_size)
+        return patches
+
+
+
     def input_processing_from_heatmap(self, heatmap_folder:str, sentence: List[str]):
+
+        heatmaps_batch = []
+        img_batch = []
+
         ## Encode image and texts with CLIP
-        heatmaps = []
+        text_token = clip.tokenize(sentence).to(self.device)
+        text_emb = self.explainability.model.encode_text(text_token)
         texts = utils.sentence2words(sentence)
-        print("texts", texts)
-        for txt in texts:
-            img_path = os.path.join(heatmap_folder, txt + ".png")
-            heatmaps.append(Image.open(img_path)) 
-        heatmaps = torch.stack(heatmaps)
-        # txt_emb, heatmaps = self.explainability.get_heatmap(img, texts)
+
+        heat_map_batch = []
+        src_padding_mask_batch = []
+        for hm_folder_i in heatmap_folder:
+            heatmaps = []
+            src_padding_masks = [0]
+            for idx, txt in enumerate(texts):
+                pilimage = torch.tensor(np.array(Image.open(os.path.join(hm_folder_i, txt + ".png")).resize((224, 224))))
+                # patches = self.image_segment(pilimage, patch_size=self.dim_in)
+                # hm = torch.tensor(patches)
+                heatmaps.append(pilimage) 
+
+                # # All zero image = Padding
+                if torch.sum(pilimage) ==0 :
+                    src_padding_masks.append(1)
+                else:
+                    src_padding_masks.append(0)
+            heat_map_batch.append(torch.stack(heatmaps, dim = 0))
+            # heat_map_batch.append(torch.cat(heatmaps, dim = 0))
+            src_padding_mask_batch.append(src_padding_masks)
+
+
+        # print("loading heatmap takes:", time.time() - start, "[s]") -> 5ms per 1 scene
+            # print(torch.amax(heat_map_batch[-1]), torch.amin(heat_map_batch[-1]))
+        heat_map_batch = torch.stack(heat_map_batch).to(self.device)
+        heat_map_batch = utils.image_reg_255(heat_map_batch)
+        # heat_map_batch  = torch.flatten(heat_map_batch, 1, 2).float()
+        
+        # heat_map_batch  = torch.flatten(heat_map_batch, 1, 2).unsqueeze(1).float()
+
         seg_idx = [0]
         hm_emb = []
 
         ## Get clip attention
-        img_enc_inp = torch.flatten(heatmaps, 0, 1).unsqueeze(1).float()
-        inp = self._image_encoder(img_enc_inp)
-        inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
-        seg_idx += [1] * inp.shape[1]
-        seg_idx = torch.tensor(seg_idx).repeat(inp.shape[0]).to(self.device)
+        img_enc_inp_2 = torch.flatten(heat_map_batch, 0, 1).unsqueeze(1).float() #[320, 1, 256, 256]
+        # img_enc_inp_1 = torch.flatten(heat_map_batch, 0, 1).float() #[320, 1, 256, 256]
+        # img_enc_inp_2 = torch.flatten(img_enc_inp_1, 1, 2).float() #[320, 1, 256, 256]
 
-        return inp, seg_idx
+        
+        inp = self._image_encoder(img_enc_inp_2)
+        inp = inp.reshape(( heat_map_batch.shape[0], heat_map_batch.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
+        
+        text_emb = text_emb.unsqueeze(0).repeat((heat_map_batch.shape[0], 1, 1))
+        inp = torch.cat([text_emb, inp], dim = 1)
+        
+        seg_idx += [1] * heat_map_batch.shape[1]
+        seg_idx = torch.tensor(seg_idx).repeat(heat_map_batch.shape[0]).to(self.device)
+
+        return inp, seg_idx, text_token, torch.tensor(src_padding_mask_batch).bool().to(self.device)
 
     def input_processing(self, img, texts):
         ## Encode image and texts with CLIP
+        # torch.Size([9, 512]), ([40, 9, 224, 224]) 
         txt_emb, heatmaps = self.explainability.get_heatmap(img, texts)
         seg_idx = [0]
         hm_emb = []
@@ -82,11 +132,22 @@ class policy(nn.Module):
         return inp, seg_idx
 
 
-    def forward(self, feat = None, seg_idx = None, img = None, texts = None):
-        pos_enc_simple = position_encoding_simple(feat.size()[-2], self.dim_ft, self.device) 
+    def forward(self, feat, seg_idx = None, txt_token = None, src_key_padding_mask = None):
+
+        feat = feat.permute((1,0,2)) # pytorch transformer takes L X B X ft
+        pos_enc_simple = position_encoding_simple(feat.size()[0], self.dim_ft, self.device) 
         feat = pos_enc_simple(feat)
 
-        out = self.transformer_encoder(feat) # L x dim_ft
+
+        # print(feat.shape, src_key_padding_mask)
+
+        # transformer src = (S, N, E)
+        if src_key_padding_mask is not None:
+            out = self.transformer_encoder(feat, src_key_padding_mask = src_key_padding_mask)
+            # out = self.transformer_encoder(hidden_states  = img, attention_mask = src_key_padding_mask) # L x dim_ft
+            # out = self.transformer_encoder(input_ids = txt_token, pixel_values  = img, attention_mask = src_key_padding_mask) # L x dim_ft
+        else:
+            out = self.transformer_encoder(feat)
         contact_seq = self.transformer_decoder(out)
         return contact_seq
 
@@ -115,175 +176,4 @@ class contact_mlp_decoder(nn.Module):
         x_cnt = self.sigmoid(self.l3(x))
 
         return x_cnt
-
-
-# class position_encoding_simple(nn.Module):
-#     def __init__(self, K: int, M: int, device) -> torch.Tensor:
-#         """
-#         An implementation of the simple positional encoding using uniform intervals
-#         for a sequence.
-
-#         args:
-#             K: int representing sequence length
-#             M: int representing embedding dimension for the sequence
-
-#         return:
-#             y: a Tensor of shape (1, K, M)
-#         """
-#         super().__init__()
-#         self.K = K
-#         self.M = M
-#         self.device = device
-
-#     def forward(self,x):
-
-#         n = torch.arange(0, self.K)
-#         y_i = (n/self.K).view(1,-1,1)
-#         y = y_i.repeat(1,1,self.M) * 0.001
-#         x = x + y.to(self.device)
-#         return x
-
-# class PositionalEncoding(nn.Module):
-#     ## Non trainable positional encoding
-#     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-#         super().__init__()
-#         self.dropout = nn.Dropout(p=dropout)
-
-#         position = torch.arange(max_len).unsqueeze(1)
-#         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-#         pe = torch.zeros(max_len, 1, d_model)
-#         pe[:, 0, 0::2] = torch.sin(position * div_term)
-#         pe[:, 0, 1::2] = torch.cos(position * div_term)
-#         self.register_buffer('pe', pe)
-
-#     def forward(self, x):
-#         """
-#         Args:
-#             x: Tensor, shape [seq_len, batch_size, embedding_dim]
-#         """
-#         x = x + self.pe[:x.size(0)]
-#         return x
-#         # return self.dropout(x)
-
-# class image_encoder(nn.Module):
-#     def __init__(self, device, dim_out):
-#         super(image_encoder, self).__init__()
-#         self.enc1 = ResNet(ResidualBlock, [1, 1, 1, 1 ], dim_out=dim_out).to(device)
-#     def forward(self, x):
-#         x = self.enc1(x)
-#         return x
-
-# class ClipExplainability(nn.Module):
-#     def __init__(self, device):
-#         super(ClipExplainability,self).__init__()
-#         self.device = device
-#         self._tokenizer = _Tokenizer()
-#         self.model, self.preprocess = clip.load("ViT-B/32", device=self.device, jit=False)
-
-#     def sentence2words(self, s):
-#         s = s.replace('.', '')
-#         words = s.split(' ')
-#         return words
-
-
-#     def get_heatmap(self, img, texts):
-#         ## text processing
-#         words = self.sentence2words(texts)
-#         words.insert(0, texts)
-#         text = clip.tokenize(words).to(self.device)
-
-#         ## image processing
-#         img = self.preprocess(Image.open(img)).unsqueeze(0).to(self.device)
-
-#         R_text, R_image, txt_emb = self.interpret(model=self.model, image=img, texts=text, device=self.device)
-#         batch_size = text.shape[0]
-#         heatmaps = []
-#         for i in range(batch_size):
-#             heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
-#             heatmaps.append(heatmap)
-#         return txt_emb, heatmaps
-
-
-#     def show_image_relevance(self, image_relevance, image, orig_image):
-#         # create heatmap from mask on image
-#         # fig, axs = plt.subplots(1, 2)
-
-#         dim = int(image_relevance.numel() ** 0.5)
-#         image_relevance = image_relevance.reshape(1, 1, dim, dim)
-#         image_relevance = torch.nn.functional.interpolate(image_relevance, size=224, mode='bilinear')
-#         image_relevance = image_relevance.reshape(224, 224).cuda().data #.cpu().numpy()
-
-#         image_relevance = (image_relevance - image_relevance.min()) / 0.04
-#         return image_relevance
-
-#         # image = image[0].permute(1, 2, 0).data #.cpu().numpy()
-#         # image = (image - image.min()) / (image.max() - image.min())
-#         # 
-#         # heatmap = cv2.applyColorMap(np.uint8(255 * image), cv2.COLORMAP_JET)
-#         # heatmap = np.float32(heatmap) / 255
-#         # 
-#         # return heatmap
-
-
-#     def interpret(self, image, texts, model, device, start_layer= -1, start_layer_text = -1):
-#         batch_size = texts.shape[0]
-#         images = image.repeat(batch_size, 1, 1, 1)
-
-#         txt_emb = model.encode_text(texts)
-
-#         logits_per_image, logits_per_text = model(images, texts)
-#         probs = logits_per_image.softmax(dim=-1).detach().cpu().numpy()
-#         index = [i for i in range(batch_size)]
-#         one_hot = np.zeros((logits_per_image.shape[0], logits_per_image.shape[1]), dtype=np.float32)
-#         one_hot[torch.arange(logits_per_image.shape[0]), index] = 1
-#         one_hot = torch.from_numpy(one_hot).requires_grad_(True)
-#         one_hot = torch.sum(one_hot.cuda() * logits_per_image)
-#         model.zero_grad()
-
-#         image_attn_blocks = list(dict(model.visual.transformer.resblocks.named_children()).values())
-
-#         if start_layer == -1:
-#           # calculate index of last layer
-#           start_layer = len(image_attn_blocks) - 1
-
-#         num_tokens = image_attn_blocks[0].attn_probs.shape[-1]
-#         R = torch.eye(num_tokens, num_tokens, dtype=image_attn_blocks[0].attn_probs.dtype).to(device)
-#         R = R.unsqueeze(0).expand(batch_size, num_tokens, num_tokens)
-#         for i, blk in enumerate(image_attn_blocks):
-#             if i < start_layer:
-#               continue
-#             grad = torch.autograd.grad(one_hot, [blk.attn_probs], retain_graph=True)[0].detach()
-#             cam = blk.attn_probs.detach()
-#             cam = cam.reshape(-1, cam.shape[-1], cam.shape[-1])
-#             grad = grad.reshape(-1, grad.shape[-1], grad.shape[-1])
-#             cam = grad * cam
-#             cam = cam.reshape(batch_size, -1, cam.shape[-1], cam.shape[-1])
-#             cam = cam.clamp(min=0).mean(dim=1)
-#             R = R + torch.bmm(cam, R)
-#         image_relevance = R[:, 0, 1:]
-
-
-#         text_attn_blocks = list(dict(model.transformer.resblocks.named_children()).values())
-
-#         if start_layer_text == -1:
-#           # calculate index of last layer
-#           start_layer_text = len(text_attn_blocks) - 1
-
-#         num_tokens = text_attn_blocks[0].attn_probs.shape[-1]
-#         R_text = torch.eye(num_tokens, num_tokens, dtype=text_attn_blocks[0].attn_probs.dtype).to(device)
-#         R_text = R_text.unsqueeze(0).expand(batch_size, num_tokens, num_tokens)
-#         for i, blk in enumerate(text_attn_blocks):
-#             if i < start_layer_text:
-#               continue
-#             grad = torch.autograd.grad(one_hot, [blk.attn_probs], retain_graph=True)[0].detach()
-#             cam = blk.attn_probs.detach()
-#             cam = cam.reshape(-1, cam.shape[-1], cam.shape[-1])
-#             grad = grad.reshape(-1, grad.shape[-1], grad.shape[-1])
-#             cam = grad * cam
-#             cam = cam.reshape(batch_size, -1, cam.shape[-1], cam.shape[-1])
-#             cam = cam.clamp(min=0).mean(dim=1)
-#             R_text = R_text + torch.bmm(cam, R_text)
-#         text_relevance = R_text
-
-#         return text_relevance, image_relevance, txt_emb
 
