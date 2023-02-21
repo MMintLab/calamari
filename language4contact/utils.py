@@ -6,14 +6,11 @@ import copy
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import random
-import torch
 import cv2
 import os
 import torch
 import torch.nn as nn
 from PIL import Image
-import matplotlib.pyplot as plt
 import numpy as np
 from torch.autograd import Variable
 import torchvision.transforms as transforms
@@ -110,9 +107,9 @@ def forsee(contact_field, start, options, moves, gamma):
             cur_cf[pixels[:, 0], pixels[:, 1]] = -20
 
             # transform the current contact
-            tf = get_transform(options[i][j], moves, cur)
-            cur[0] = tf @ cur[0]
-            cur[1] = tf @ cur[1]
+            tf_ = get_transform(options[i][j], moves, cur)
+            cur[0] = tf_ @ cur[0]
+            cur[1] = tf_ @ cur[1]
 
 
 
@@ -194,8 +191,9 @@ def folder2filelist(traj_gt_path, sort = True):
 def get_traj_mask(traj):
     mask = torch.zeros_like(read_mask(traj[0], d = 1))
     for fn in traj:
-        img = read_mask(fn, d = 1)
-        mask = torch.where(img == 1, img, mask)
+        if len(fn) > 0 :
+            img = read_mask(fn, d = 1)
+            mask = torch.where(img == 1, img, mask)
 
     # save mask as fn
     # cv2.imwrite(save_fn, mask.numpy()* 255.)

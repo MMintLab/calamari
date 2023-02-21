@@ -25,14 +25,13 @@ class Config:
         self.epoch = 30000
         self.gamma = 0.96
 
-        self.B = 40
+        self.B = 20
         self.device = 'cuda'
-        self.dim_ft = 512 # 32
+        self.dim_ft = 64 # 32
         self.seed = 42
-        self.len = 70 # number of training data
 
-        self.train_idx = np.arange(0,140)
-        self.test_idx = np.arange(140,150)
+        self.train_idx = np.arange(0,190)
+        self.test_idx = np.arange(190,200)
         self.train_s = 10
 
         # self.n_idx = self.get_negative_idxs()
@@ -57,6 +56,15 @@ class Config:
         self.tab_scale = (110,110)
         self.tab_offset = (0.4, 0.6)
         self.table_h = 0.5 #496
+
+        # Data dir
+        self.data_dir = 'dataset/heuristics'
+        self.contact_folder = 'contact_front'
+        self.contact_seq_l = 4
+        self.txt_cmd = "Use the sponge to clean up the dirt."
+
+
+
 
     def world_to_camera(self, cnt_pts):
         cnt_pts_ = np.ones((4, cnt_pts.shape[0]))

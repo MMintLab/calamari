@@ -11,7 +11,6 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
     def __init__(self, Config, mode = 'train', seq_l = -1):
         self.Config = Config
         self.len = self.Config.len
-        self.contact_folder = 'contact_key_front'
         self.mode = mode 
         self.return_seq_l = seq_l
         if self.mode == "train":
@@ -19,8 +18,12 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         if self.mode == "test":
             self.folder_idx = self.Config.test_idx
 
+
+        self.contact_folder = self.Config.contact_folder  #'contact_key_front'
+        self.data_dir = self.Config.data_dir
         self.data_summary = self.get_data_summary()
         self.cnt_w, self.cnt_h = self.get_cnt_img_dim()
+
 
     def _get_idx_from_fn(self, fn):
         return int(fn.split('.')[0][-3:])
@@ -43,7 +46,10 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         data_summary = {'tot_rgb_flat': [], 'tot_rgb_index':{}}
         tot_length = 0
         for i in self.folder_idx:
-            folder_path = f'dataset/keyframes/t_{i:02d}/rgb'
+            if i < 100:
+                folder_path = f'{self.data_dir}/t_{i:02d}/rgb'
+            else:
+                folder_path = f'{self.data_dir}/t_{i}/rgb'
             # get the list of trajectories within the folder
             traj_cnt_fn = folder2filelist(folder_path)
             traj_cnt_fn.sort()
@@ -61,7 +67,7 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         return len(self.data_summary['tot_rgb_flat'])
 
     def get_cnt_img_dim(self):
-        folder_path1 = f'dataset/keyframes/t_{self.folder_idx[0]:02d}'
+        folder_path1 = f'{self.data_dir}/t_{self.folder_idx[0]:02d}'
         traj_cnt_path = os.path.join(folder_path1,self.contact_folder )
         traj_cnt_fn = folder2filelist(traj_cnt_path)
         traj_cnt_fn.sort()
@@ -100,17 +106,22 @@ class DatasetSeq_front_feedback(torch.utils.data.Dataset):
         if self.return_seq_l > 0:
             traj_cnt_fn = traj_cnt_fn[:self.return_seq_l]
 
+        if len(traj_cnt_fn) > self.Config.contact_seq_l :
+            traj_cnt_fn = traj_cnt_fn[: self.Config.contact_seq_l]
+
         traj_cnt_lst = fn2img(traj_cnt_fn, d = 1)
         traj_cnt_lst = torch.stack(traj_cnt_lst, dim = 0)
         
-        if 4 - len(traj_cnt_fn):
-            filler = torch.zeros((4 - len(traj_cnt_fn), traj_cnt_lst.shape[1], traj_cnt_lst.shape[2]))
+
+        if len(traj_cnt_fn) < self.Config.contact_seq_l :
+            # Fill with padding.
+            filler = torch.zeros((self.Config.contact_seq_l - len(traj_cnt_fn), traj_cnt_lst.shape[1], traj_cnt_lst.shape[2]))
             traj_cnt_lst = torch.cat([traj_cnt_lst, filler], dim = 0)
 
         mask_ = get_traj_mask(traj_cnt_fn)
         mask_t = torch.tensor(mask_).to(self.Config.device)
 
-
+        # print(len(traj_cnt_lst), len(traj_rgb_lst))
         return   {"traj_rgb": traj_rgb_lst, 
                     "traj_cnt_lst": traj_cnt_lst, 
                     "mask_t": mask_t, 

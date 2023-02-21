@@ -12,6 +12,13 @@ from .resnet import ResNet, ResidualBlock
 from .Transformer_MM_Explainability.CLIP.clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from .Transformer_MM_Explainability.CLIP import clip 
 
+
+def sentence2words(s):
+    s = s.replace('.', '')
+    words = s.split(' ')
+    return words
+
+
 class ClipExplainability(nn.Module):
     def __init__(self, device):
         super(ClipExplainability,self).__init__()
@@ -19,10 +26,48 @@ class ClipExplainability(nn.Module):
         self._tokenizer = _Tokenizer()
         self.model, self.preprocess = clip.load("ViT-B/32", device=self.device, jit=False)
 
-    def sentence2words(self, s):
-        s = s.replace('.', '')
-        words = s.split(' ')
-        return words
+    def get_heatmap_temporal(self, img_batch_pths, texts):
+        ## text processing
+        words = sentence2words(texts)
+        words.insert(0, texts)
+        text = clip.tokenize(words).to(self.device)
+
+        ## image processing
+        txt_emb_batch = []
+        heatmaps_batch = []
+        img_batch = []
+        padding_masks = []
+        # print(img_batch_pths)
+        for img_pths in img_batch_pths:
+            padding_mask = []
+            for img_pth in img_pths:
+                if len(img_pth) > 0:
+                    img = Image.open(img_pth)
+                    img = self.preprocess(img).to(self.device)
+                    R_text, R_image, txt_emb = self.interpret(model=self.model, image=img, texts=text, device=self.device)
+                    batch_size = text.shape[0]
+
+                    heatmaps = []
+                    for i in range(batch_size):
+                        heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
+                        heatmaps.append(heatmap)
+
+                    txt_emb_batch.append(txt_emb)
+                    heatmaps_batch.append( torch.stack(heatmaps))
+                    img_batch.append(img)
+                    padding_mask.append(0)
+
+                elif len(img_pth) == 0: #type(None):
+                    txt_emb = torch.zeros_like(txt_emb_batch[0]).to(self.device)
+                    heatmaps = torch.zeros_like(heatmaps_batch[0]).to(self.device)
+                    img = torch.zeros_like(img_batch[0]).to(self.device)
+
+                    txt_emb_batch.append(txt_emb)
+                    heatmaps_batch.append(heatmaps)
+                    img_batch.append(img)
+                    padding_mask.append(1)
+            padding_masks.append(padding_mask)
+        return txt_emb, torch.stack(heatmaps_batch), torch.tensor(padding_masks).bool()
 
 
     def get_heatmap(self, img_pths, texts):
@@ -35,7 +80,7 @@ class ClipExplainability(nn.Module):
         txt_emb_batch = []
         heatmaps_batch = []
         img_batch = []
-
+        print(img_pths)
         for img_pth in img_pths:
             if type(img_pth) == str:
                 img = Image.open(img_pth)

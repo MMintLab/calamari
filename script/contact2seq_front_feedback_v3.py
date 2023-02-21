@@ -42,7 +42,7 @@ class ContactEnergy():
 
         ## Define policy model
         dimout = train_dataset.cnt_w * train_dataset.cnt_h
-        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_in = train_dataset.cnt_w, dim_out= dimout).cuda()
+        self.policy = policy(self.Config.device, self.Config.dim_ft, dim_in = train_dataset.cnt_w, dim_out= dimout, image_size = train_dataset.cnt_w).cuda()
         if  len(args.gpu_id) > 1:
             self.policy.transformer_encoder = nn.DataParallel(self.policy.transformer_encoder)
             self.policy._image_encoder = nn.DataParallel(self.policy._image_encoder)
@@ -58,7 +58,7 @@ class ContactEnergy():
                 {"params" : self.policy.segment_emb.parameters()},
                 {"params": self.policy.transformer_decoder.parameters()}, #, "lr":0.005
                 # {"params" : self.feat}
-            ], lr=0.00003)
+            ], lr=0.00005)
 
 
     def save_model(self, epoch):
@@ -117,7 +117,7 @@ class ContactEnergy():
 
 
             feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-            contact_seq = self.policy(feat, seg_idx).permute((1,0,2)).reshape(-1, c_img_w, c_img_h)
+            contact_seq = self.policy(feat, seg_idx).reshape(-1, c_img_w, c_img_h)
             contact_seq = contact_seq[:traj_cnt_lst.shape[1], :, :]
 
             contact_histories.append( union_img( contact_seq.detach().cpu()) )
@@ -185,22 +185,34 @@ class ContactEnergy():
             l_i_hist = []
 
             for data in self.train_dataLoader:
+                txt = data['txt'][0]
+                heatmap_folder = data['heatmap_folder']
+
                 l = data["idx"]
                 rgb = data['traj_rgb']
                 traj_cnt_lst = data['traj_cnt_lst'] #([B, input_length, img_w, img_h])
                 _, l_inp, c_img_w, c_img_h = traj_cnt_lst.shape
 
 
-                feat, seg_idx =  self.policy.input_processing(rgb, TXT)
-                contact_seq = self.policy(feat, seg_idx).permute((1,0,2))
-                # print(contact_seq.shape)
+                # feat, seg_idx =  self.policy.input_processing(rgb, TXT)
+                feat, seg_idx, txt_token , src_padding_mask_batch =  self.policy.input_processing_from_heatmap(heatmap_folder, txt)
+                contact_seq = self.policy(feat, seg_idx, txt_token = txt_token, src_key_padding_mask = None).permute((1, 0, 2))
+
                 contact_seq = contact_seq.reshape(contact_seq.shape[0], contact_seq.shape[1], c_img_w, c_img_h)
                 contact_seq = contact_seq[:, :traj_cnt_lst.shape[1], :, :]
+                # print(torch.amax(torch.flatten(contact_seq[0], -2, -1), axis = 1))
 
         
-                # loss
+                    # loss
                 loss0_i = torch.norm( traj_cnt_lst.to(self.Config.device).squeeze() - contact_seq.squeeze(), p =2) / ( 150 **2 *l_inp )
                 loss0_i = 1e6 * loss0_i
+                # loss0_i = torch.norm( torch.flatten(traj_cnt_lst.to(self.Config.device), 0, 1) - 
+                #                             torch.flatten(contact_seq, 0, 1), dim = (1,2)) 
+                # loss0_i = torch.norm( traj_cnt_lst.to(self.Config.device)- contact_seq, dim = (-2, -1)) 
+                # print(contact_seq.shape, loss0_i.shape)
+                # loss0_i = torch.mean(loss0_i) / ( 225 * 2 )
+                # loss0_i = torch.norm( traj_cnt_lst.to(self.Config.device).squeeze() - contact_seq.squeeze(), p =2) / ( 150 **2 *l_inp )
+                # loss0_i = 1e6 * loss0_i
                 self.optim.zero_grad()
                 loss0_i.backward()
                 self.optim.step()
@@ -222,12 +234,12 @@ class ContactEnergy():
             if i % 5 == 0 or i == self.Config.epoch -1:
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl)
             
-            if i % 10 == 0 or i == self.Config.epoch -1:               
-                contact_histories, contact_histories_ovl, loss0_i  = self._evaluate_testdataset()
-                self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, loss0_i)
+            # if i % 10 == 0 or i == self.Config.epoch -1:               
+            #     contact_histories, contact_histories_ovl, loss0_i  = self._evaluate_testdataset()
+            #     self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, loss0_i)
 
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
 
-CE = ContactEnergy( log_path = 'transformer_seq2seq_feedback_h')
+CE = ContactEnergy( log_path = 'transformer_seq2seq_feedback_v3')
 CE.get_energy_field()
