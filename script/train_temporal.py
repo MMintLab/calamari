@@ -34,10 +34,10 @@ class ContactEnergy():
         ## Data-loader
         self.train_dataset = Dataset(self.Config, mode = "train")
         self.train_dataLoader = DataLoader(dataset= self.train_dataset,
-                         batch_size=self.Config.B, shuffle=True, drop_last=True)
+                         batch_size=self.Config.B, shuffle=True, drop_last=False)
 
         self.test_dataLoader = DataLoader(dataset=Dataset(self.Config, mode = "test"),
-                         batch_size=self.Config.B, shuffle=False, drop_last=True)
+                         batch_size=self.Config.B, shuffle=False, drop_last=False)
 
 
 
@@ -65,14 +65,18 @@ class ContactEnergy():
 
         for data in dataloader:
             l = data["idx"]
-            rgb = zip(*data['traj_rgb_paths'])
-            traj_cnt_lst = zip(*data['traj_cnt_paths']) #([B, input_length, img_w, img_h])\
+            rgb = list(zip(*data['traj_rgb_paths']))
+            traj_cnt_lst = list(zip(*data['traj_cnt_paths'])) #([B, input_length, img_w, img_h])\
             traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0)
 
-            feat, seg_idx, padding_mask  =  self.policy.input_processing(rgb, TXT)
-            contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
+            visual_sentence, fused_x, padding_mask  =  self.policy.input_processing(rgb, TXT)
+            # visual_sentence = torch.amax(visual_sentence, dim = 1, keepdim = True)
+            visual_sentence = torch.flatten(visual_sentence[:,1:,:], start_dim=1, end_dim=2).unsqueeze(1)
 
-    
+            fused_x= torch.stack(fused_x)[:,0,:].unsqueeze(1)
+            contact_seq = self.policy.forward_lava(visual_sentence, fused_x, padding_mask = padding_mask.to(self.Config.device))
+            # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
+
             # loss
             loss0_i = torch.norm( traj_cnt_img.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
             loss0_i = 1e6 * loss0_i
@@ -111,6 +115,7 @@ class ContactEnergy():
             if i % 10 == 5 or i == self.Config.epoch - 1:
                 CE.save_model(i)
             if i % 5 == 0 or i == self.Config.epoch -1: 
+                self.policy.train(True)
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = 20)
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
@@ -118,7 +123,8 @@ class ContactEnergy():
             
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
-            if i % 10 == 0 or i == self.Config.epoch -1: 
+            if i % 5 == 0 or i == self.Config.epoch -1: 
+                self.policy.train(False)
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.test_dataLoader, write = True, N = 20)
                 self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, tot_loss)
 
@@ -202,5 +208,5 @@ class ContactEnergy():
         return torch.tensor(rgb)
 
 
-CE = ContactEnergy( log_path = 'transformer_seq2seq_feedback_h')
+CE = ContactEnergy( log_path = 'transformer_seq2seq_feedback_h_lava')
 CE.get_energy_field()

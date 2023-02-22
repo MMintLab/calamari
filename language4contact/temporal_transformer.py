@@ -17,6 +17,58 @@ https://github.com/google-research/language-table/blob/770dade55237f31b7028dbff4
   d_model: int = 128
   num_heads: int = 2
 """
+class PrenormPixelLangEncoder(nn.Module): 
+    def __init__(self, num_layers: int = 2, num_heads: int=2, dropout_rate: float = 0.1,
+                 dff: int =128, mha_dropout_rate: float = 0.0, device: int = 'cpu'):
+        super(PrenormPixelLangEncoder, self).__init__()
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.dff = dff
+        self.dropout_rate = dropout_rate
+        self.mha_dropout_rate = mha_dropout_rate
+
+        self.multiheadattention = nn.MultiheadAttention(embed_dim = self.dff, num_heads = self.num_heads, dropout=self.mha_dropout_rate)
+        self.Dropout = nn.Dropout(p = self.dropout_rate)
+        self.LayerNorm = nn.LayerNorm([self.dff])
+
+        self.l5 = nn.Linear(self.dff, self.dff)
+        self.l6 = nn.Linear(self.dff, self.dff)
+        self.relu = nn.ReLU()
+
+        nn.init.uniform_(self.l5.weight, 0, 0.05)
+        nn.init.uniform_(self.l5.bias, 0, 0.05)
+        nn.init.uniform_(self.l6.weight, 0, 0.05)
+        nn.init.uniform_(self.l6.bias, 0, 0.05)
+
+    def forward(self, pixel_x, lang_x):
+        # residual_lang = lang_x
+
+        for _ in range(self.num_layers):
+            pixel_x_ = self.LayerNorm(pixel_x)
+            lang_x_ = self.LayerNorm(lang_x.to(pixel_x.dtype))
+            # print(pixel_x_.shape, lang_x_.shape)
+            x2, _ = self.multiheadattention(query = lang_x_, 
+                                         key = pixel_x_, 
+                                         value = pixel_x_)
+            x2 = self.Dropout(x2)
+
+            # Residual, only on the language path.
+            x3 = lang_x + x2
+
+            # layer norm just the ffn input.
+            x4 = self.LayerNorm(x3)
+
+            # ffn.
+            x5 = self.l5(x4)
+            x5 = self.relu(x5)
+            x5 = self.l6(x5)
+            x5 = self.Dropout(x5)
+
+            lang_x = x5 + x3
+
+        return lang_x
+
+
 
 class TemporalTransformer(nn.Module):
     """Transformer over time."""

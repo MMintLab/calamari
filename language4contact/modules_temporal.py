@@ -14,7 +14,7 @@ from PIL import Image
 from .Transformer_MM_Explainability.CLIP.clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from .Transformer_MM_Explainability.CLIP import clip 
 from language4contact.modules_shared import *
-from language4contact.temporal_transformer import TemporalTransformer
+from language4contact.temporal_transformer import TemporalTransformer, PrenormPixelLangEncoder
 import language4contact.utils as utils
 from functools import partial
 from typing import Any, Callable, List, Optional, Type, Union
@@ -32,15 +32,21 @@ class policy(nn.Module):
 
         ## Input processing for Transformer
         self.explainability = ClipExplainability(self.device)
-        self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = self.dim_ft)
+        self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(self.dim_ft/8))
 
         ## Transformer Encoder
         self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=50).to(self.device)
 
-        # vision language transformer.
-        encoder_layer = nn.TransformerEncoderLayer(d_model=self.dim_ft, dim_feedforward=128, nhead=1) #default: nhead = 8
-        self.vl_transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
-        self.vl_transformer_encoder.to(self.device)
+        # # vision language transformer.
+        # encoder_layer = nn.TransformerEncoderLayer(d_model=self.dim_ft, dim_feedforward=128, nhead=1) #default: nhead = 8
+        # self.vl_transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
+        # self.vl_transformer_encoder.to(self.device)
+
+        self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=2, dropout_rate=0.1, mha_dropout_rate=0.0,
+          dff=self.dim_ft)
+        self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float)
+
+
         self.transformer_decoder = contact_mlp_decoder(self.dim_ft, dim_out = dim_out).to(self.device)
 
         # temporal transformer.
@@ -104,11 +110,17 @@ class policy(nn.Module):
                     # img_batch.append(img)
                     padding_mask.append(1)
             padding_masks.append(padding_mask)
-        return txt_emb, torch.stack(heatmaps_batch), torch.tensor(padding_masks).bool()
+        return txt_emb_batch, torch.stack(heatmaps_batch), torch.tensor(padding_masks).bool()
     
-    def input_processing(self, img, texts):
+    def input_processing(self, img, texts, mode = 'train'):
+        """
+        mode = 'train' : load heatmap
+        mode = 'test' : generate heatmap every time step
+        """
         # txt_emb, heatmaps, padding_mask = self.explainability.get_heatmap_temporal(img, texts)
+
         txt_emb, heatmaps, padding_mask = self.read_heatmap_temporal(img, texts)
+        self.B = len(img)
         seg_idx = [0]
         hm_emb = []
 
@@ -119,7 +131,7 @@ class policy(nn.Module):
         seg_idx += [1] * inp.shape[1]
         seg_idx = torch.tensor(seg_idx).repeat(inp.shape[0]).to(self.device)
 
-        return inp, seg_idx, padding_mask
+        return inp, txt_emb, padding_mask
 
 
     def forward(self, feat, seg_idx = None, txt_token = None, padding_mask = None):
@@ -136,9 +148,27 @@ class policy(nn.Module):
         tp_output = self.tp_transformer(out, padding_mask = padding_mask)
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
         w = int(np.sqrt(contact.shape[-1]))
-        contact = contact.reshape((self.Config.B, w, w ))
+        contact = contact.reshape((self.B, w, w ))
         return contact
 
+    def forward_lava(self, visual_sentence, fused_x, padding_mask):
+        visual_sentence = visual_sentence.permute((1,0,2)) # pytorch transformer takes L X (B * l_contact_seq) X ft
+        fused_x = fused_x.permute((1,0,2)) # pytorch transformer takes L X (B * l_contact_seq) X ft
+
+        
+        # pos_enc_simple = position_encoding_simple(K= feat.size()[0], M=self.dim_ft, device=self.device) 
+        # feat = pos_enc_simple(feat)
+
+        out = self.vl_transformer_encoder(visual_sentence, fused_x) # L x (B * l_contact_seq) X ft
+        # out = torch.mean(out, axis = 0)
+        out = out.reshape((self.B, self.L, -1))
+        out = out.permute((1,0,2))
+
+        tp_output = self.tp_transformer(out, padding_mask = padding_mask)
+        contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
+        w = int(np.sqrt(contact.shape[-1]))
+        contact = contact.reshape((self.B, w, w ))
+        return contact
 
     def input_processing_from_heatmap(self, heatmap_folder:str, sentence: List[str]):
 

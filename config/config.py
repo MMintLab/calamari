@@ -27,11 +27,11 @@ class Config:
 
         self.B = 20
         self.device = 'cuda'
-        self.dim_ft = 64 # 32
+        self.dim_ft = 512 # 32
         self.seed = 42
 
-        self.train_idx = np.arange(0,190)
-        self.test_idx = np.arange(190,200)
+        self.train_idx = np.arange(0,290)
+        self.test_idx = np.arange(290,300)
         self.train_s = 10
 
         # self.n_idx = self.get_negative_idxs()
@@ -58,7 +58,7 @@ class Config:
         self.table_h = 0.5 #496
 
         # Data dir
-        self.data_dir = 'dataset/heuristics'
+        self.data_dir = 'dataset/heuristics_coarse'
         self.contact_folder = 'contact_front'
         self.contact_seq_l = 4
         self.txt_cmd = "Use the sponge to clean up the dirt."

@@ -40,7 +40,7 @@ def generate_heatmap(file_path, labels, save_folder, prompts=["a picture of a {}
 if __name__ == '__main__':
     import os
     keywords = ["Use the sponge to clean up the dirt", "Use","the", "sponge" ,"to" ,"clean" ,"up", "the" ,"dirt"]
-    data_origrin = "dataset/heuristics"
+    data_origrin = "dataset/heuristics_coarse"
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
 
