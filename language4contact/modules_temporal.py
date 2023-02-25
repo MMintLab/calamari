@@ -91,7 +91,7 @@ class policy(nn.Module):
                         hm_pth = img_pth.replace('rgb/', 'heatmap/').split('.')[0]
                         wd = wd.replace('.', '')
                         hm_pth = os.path.join(hm_pth, wd + '.png')
-                        heatmap = torch.tensor( np.array(Image.open(hm_pth))).to(self.device)
+                        heatmap = torch.tensor( np.array(Image.open(hm_pth))/125. - 1).to(self.device)
                         # heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
                         heatmaps.append(heatmap)
 

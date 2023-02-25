@@ -30,7 +30,8 @@ class Config:
         self.dim_ft = 512 # 32
         self.seed = 42
 
-        self.train_idx = np.arange(0,290)
+        # self.train_idx = np.concatenate([np.arange(0,250), np.arange(500,1000)])
+        self.train_idx = np.arange(0,100)
         self.test_idx = np.arange(290,300)
         self.train_s = 10
 
@@ -58,7 +59,7 @@ class Config:
         self.table_h = 0.5 #496
 
         # Data dir
-        self.data_dir = 'dataset/heuristics_coarse'
+        self.data_dir = 'dataset/heuristics_coarser'
         self.contact_folder = 'contact_front'
         self.contact_seq_l = 4
         self.txt_cmd = "Use the sponge to clean up the dirt."

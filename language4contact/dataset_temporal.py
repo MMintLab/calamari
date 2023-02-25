@@ -50,18 +50,20 @@ class DatasetTemporal(torch.utils.data.Dataset):
         tot_length = 0
         for i in self.folder_idx:
             cnt_folder_path = f'{self.data_dir}/t_{i:03d}/contact_front'
+            rgb_folder_path = f'{self.data_dir}/t_{i:03d}/rgb'
 
             # get the list of trajectories within the folder
             traj_cnt_fn = folder2filelist(cnt_folder_path)
             traj_cnt_fn.sort()
 
             # get the list of trajectories within the folder
-            traj_rgb_fn = [traj_cnt_fn_i.replace('contact_front', 'rgb') for traj_cnt_fn_i in traj_cnt_fn]
-            traj_rgb_fn = [traj_rgb_fn_i.replace('contact', 'rgb') for traj_rgb_fn_i in traj_rgb_fn]
+            traj_rgb_fn = folder2filelist(rgb_folder_path)
+            traj_rgb_fn.sort()
+            # traj_rgb_fn = [traj_cnt_fn_i.replace('contact_front', 'rgb') for traj_cnt_fn_i in traj_cnt_fn]
+            # traj_rgb_fn = [traj_rgb_fn_i.replace('contact', 'rgb') for traj_rgb_fn_i in traj_rgb_fn]
 
             
-            
-            traj_cnt_fn = traj_cnt_fn[1:] # pop first cnt 
+            # traj_cnt_fn = traj_cnt_fn # pop first cnt 
             traj_rgb_fn = traj_rgb_fn[:-1] # pop last obs 
 
             # Add dataset.
@@ -71,13 +73,14 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
             # Index.
             for local_idx_i in local_idx:
-                # (tot_idx, local_idx, max local idx)
-                data_summary['tot_rgb_index'][tot_length + local_idx_i] = (i, local_idx_i, len(local_idx))
-                data_summary['tot_cnt_index'][tot_length + local_idx_i] = (i, local_idx_i, len(local_idx))
+                # (tot_idx, local_idx, min local idx)
+                data_summary['tot_rgb_index'][tot_length + local_idx_i] = (i, local_idx_i, tot_length)
+                data_summary['tot_cnt_index'][tot_length + local_idx_i] = (i, local_idx_i, tot_length)
             
             
             tot_length += len(traj_cnt_fn)
         self.tot_length = tot_length
+
         return data_summary
 
     def __len__(self):
@@ -100,7 +103,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         # txt  = "sponge sponge dirt dirt dirt."
 
         # local index follows rgb.
-        demo_idx, local_idx, max_local_idx = self.data_summary['tot_rgb_index'][idx] # convert to actual index by train/test
+        demo_idx, local_idx, min_local_idx = self.data_summary['tot_rgb_index'][idx] # convert to actual index by train/test
         folder_path  =  Path(self.data_summary['tot_rgb_flat'][idx]).parent.parent
         
         # t-3, t-2, t-1, t RGB
@@ -108,11 +111,11 @@ class DatasetTemporal(torch.utils.data.Dataset):
             # traj_rgb_lst = [-1, -1, -1, -1]
             traj_rgb_lst = ['','','','']
 
-            traj_rgb_lst[:local_idx+1] = self.data_summary['tot_rgb_flat'][:local_idx+1]
-            traj_cnt_lst = [self.data_summary['tot_cnt_flat'][local_idx]]
+            traj_rgb_lst[:local_idx+1] = self.data_summary['tot_rgb_flat'][min_local_idx:idx+1]
+            traj_cnt_lst = [self.data_summary['tot_cnt_flat'][idx]]
         else:
-            traj_rgb_lst = self.data_summary['tot_rgb_flat'][local_idx-3:local_idx+1]
-            traj_cnt_lst = [self.data_summary['tot_cnt_flat'][local_idx]]
+            traj_rgb_lst = self.data_summary['tot_rgb_flat'][idx-3:idx+1]
+            traj_cnt_lst = [self.data_summary['tot_cnt_flat'][idx]]
 
         traj_cnt_img = fn2img(traj_cnt_lst, d = 1)
         mask_ = get_traj_mask(traj_cnt_lst)

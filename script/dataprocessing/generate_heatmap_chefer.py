@@ -16,9 +16,9 @@ def generate_heatmap(file_path, labels, save_folder, prompts=["a picture of a {}
     save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])
     if not os.path.exists(save_folder_):
         os.mkdir(save_folder_) 
-    # else:
-    #     print(save_folder_, "exists")
-    #     return
+    else:
+        print(save_folder_, "exists")
+        return
     
     for label in keywords:
         text = clip.tokenize(label).to(device)
@@ -40,7 +40,7 @@ def generate_heatmap(file_path, labels, save_folder, prompts=["a picture of a {}
 if __name__ == '__main__':
     import os
     keywords = ["Use the sponge to clean up the dirt", "Use","the", "sponge" ,"to" ,"clean" ,"up", "the" ,"dirt"]
-    data_origrin = "dataset/heuristics_coarse"
+    data_origrin = "dataset/heuristics_coarser"
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
 

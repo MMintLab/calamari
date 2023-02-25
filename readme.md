@@ -17,3 +17,15 @@ git submodule add -f https://github.com/hila-chefer/Transformer-MM-Explainabilit
 # git clone https://github.com/hila-chefer/Transformer-MM-Explainability.git
 ```
 
+
+
+## Generetate Heatmap for training
+```
+ python script/dataprocessing/generate_heatmap_chefer.py
+```
+
+## Train
+```
+# temporal transformer
+python script/train_temporal.py --gpu_id 0
+```

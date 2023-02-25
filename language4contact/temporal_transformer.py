@@ -29,7 +29,9 @@ class PrenormPixelLangEncoder(nn.Module):
 
         self.multiheadattention = nn.MultiheadAttention(embed_dim = self.dff, num_heads = self.num_heads, dropout=self.mha_dropout_rate)
         self.Dropout = nn.Dropout(p = self.dropout_rate)
-        self.LayerNorm = nn.LayerNorm([self.dff])
+        self.LayerNorm1 = nn.LayerNorm([self.dff])
+        self.LayerNorm2 = nn.LayerNorm([self.dff])
+        self.LayerNorm3 = nn.LayerNorm([self.dff])
 
         self.l5 = nn.Linear(self.dff, self.dff)
         self.l6 = nn.Linear(self.dff, self.dff)
@@ -44,8 +46,8 @@ class PrenormPixelLangEncoder(nn.Module):
         # residual_lang = lang_x
 
         for _ in range(self.num_layers):
-            pixel_x_ = self.LayerNorm(pixel_x)
-            lang_x_ = self.LayerNorm(lang_x.to(pixel_x.dtype))
+            pixel_x_ = self.LayerNorm1(pixel_x)
+            lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype))
             # print(pixel_x_.shape, lang_x_.shape)
             x2, _ = self.multiheadattention(query = lang_x_, 
                                          key = pixel_x_, 
@@ -56,7 +58,7 @@ class PrenormPixelLangEncoder(nn.Module):
             x3 = lang_x + x2
 
             # layer norm just the ffn input.
-            x4 = self.LayerNorm(x3)
+            x4 = self.LayerNorm3(x3)
 
             # ffn.
             x5 = self.l5(x4)
@@ -104,7 +106,7 @@ class TemporalTransformer(nn.Module):
 
 
     def forward(self, x, padding_mask):
-        x = x.permute((1,0,2)) # [2, 4, 64]
+        x = x.permute((1,0,2)) # BxLxft
         x = self.l1(x)
         x *= np.sqrt(self.d_model)
 
@@ -112,10 +114,10 @@ class TemporalTransformer(nn.Module):
         x = self.Dropout(x)
 
         for enc_i in self.PrenormEncoderLayer:
-            x = enc_i(x, padding_mask = padding_mask)
+            x = enc_i(x, padding_mask = padding_mask) # TODO : check input order 
+
 
         x = torch.mean(x, axis=1)
-
         x = self.LayerNorm(x)
         return x
 
@@ -164,7 +166,7 @@ class PrenormEncoderLayer(nn.Module):
         """
         x1 = self.layernorm1(x)
 
-        # pytorch transformer messed up with order
+        # pytorch transformer messed up with Batch order 
         x1 = x1.permute((1,0,2))
         x2, _ = self.multiheadattention(query = x1, key = x1, value = x1, key_padding_mask = padding_mask)
         x2 = x2.permute((1,0,2))

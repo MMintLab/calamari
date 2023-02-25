@@ -53,7 +53,7 @@ class ContactEnergy():
                 {"params" : self.policy._image_encoder.parameters()},
                 {"params": self.policy.transformer_decoder.parameters()}, #, "lr":0.005
                 {"params": self.policy.tp_transformer.parameters()}, #, "lr":0.005
-            ], lr=0.00005)
+            ], lr=1e-6)
 
 
     def feedforward(self, dataloader, write = False, N = 200):
@@ -106,7 +106,8 @@ class ContactEnergy():
                 torch.cuda.empty_cache()
                 self._initialize_loss(mode = 'p')
 
-        return contact_histories, contact_histories_ovl, tot_loss
+        # return contact patches, patches overlaid with RGB, normalized total loss
+        return contact_histories, contact_histories_ovl, tot_loss / dataloader.__len__()
 
 
 
@@ -208,5 +209,5 @@ class ContactEnergy():
         return torch.tensor(rgb)
 
 
-CE = ContactEnergy( log_path = 'transformer_seq2seq_feedback_h_lava')
+CE = ContactEnergy( log_path = 'transformer_h_lava_coarser')
 CE.get_energy_field()
