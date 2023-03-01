@@ -116,12 +116,13 @@ class ContactEnergy():
         for i in range (self.Config.epoch):
             if i % 10 == 5 or i == self.Config.epoch - 1:
                 CE.save_model(i)
+            
+            self.policy.train(True)
             if i % 5 == 0 or i == self.Config.epoch -1: 
-                self.policy.train(True)
-                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = 20)
+                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = 200)
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
-                _, _, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = 200)
+                _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, N = 20)
             
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
