@@ -53,7 +53,7 @@ class ContactEnergy():
                 {"params" : self.policy._image_encoder.parameters()},
                 {"params": self.policy.transformer_decoder.parameters()}, #, "lr":0.005
                 {"params": self.policy.tp_transformer.parameters()}, #, "lr":0.005
-            ], lr=1e-6)
+            ], lr=1e-5)
 
 
     def feedforward(self, dataloader, write = False, N = 200):
@@ -79,6 +79,7 @@ class ContactEnergy():
 
             # loss
             loss0_i = torch.norm( traj_cnt_img.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
+            # print(loss0_i,  torch.norm(traj_cnt_img.to(self.Config.device)), torch.norm(contact_seq.to(self.Config.device)))
             loss0_i = 1e6 * loss0_i
             self.optim.zero_grad()
             loss0_i.backward()
@@ -101,13 +102,13 @@ class ContactEnergy():
                         l_i_hist.append(l_i)
                     # l_ir += 1
 
-                self.tot_loss['loss0'] = self.tot_loss['loss0']  + loss0_i.detach().cpu()
-                tot_loss += loss0_i.detach().cpu()
-                torch.cuda.empty_cache()
-                self._initialize_loss(mode = 'p')
+            # self.tot_loss['loss0'] = self.tot_loss['loss0']  + loss0_i.detach().cpu()
+            tot_loss += loss0_i.detach().cpu()
+            # torch.cuda.empty_cache()
+            # self._initialize_loss(mode = 'p')
 
         # return contact patches, patches overlaid with RGB, normalized total loss
-        return contact_histories, contact_histories_ovl, tot_loss / dataloader.__len__()
+        return contact_histories, contact_histories_ovl, tot_loss
 
 
 
@@ -135,13 +136,12 @@ class ContactEnergy():
         # if not os.path.exists(path):
         #     os.makedirs(path)
         torch.save({"epoch": epoch,
-                    "path" : self.logdir ,
-                    "transformer_encoder" : self.policy.vl_transformer_encoder.state_dict(),
-                    "image_encoder" : self.policy._image_encoder.state_dict(),
-                    "transformer_decoder" : self.policy.transformer_decoder.state_dict(),
-                    "segment_emb" : self.policy.tp_transformer.state_dict(),
+            "path" : self.logdir ,
+            "param" : self.policy.state_dict(),
+            }, self.logdir + "/policy.pth")
+        torch.save({"epoch": epoch,
                     "optim" : self.optim.state_dict()
-                    }, path)
+                    }, self.logdir + "/optim.pth")
 
 
     def _initlize_writer(self, log_dir):

@@ -35,14 +35,14 @@ class policy(nn.Module):
         self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(self.dim_ft/8))
 
         ## Transformer Encoder
-        self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=50).to(self.device)
+        self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=30).to(self.device)
 
         # # vision language transformer.
         # encoder_layer = nn.TransformerEncoderLayer(d_model=self.dim_ft, dim_feedforward=128, nhead=1) #default: nhead = 8
         # self.vl_transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
         # self.vl_transformer_encoder.to(self.device)
 
-        self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=2, dropout_rate=0.1, mha_dropout_rate=0.0,
+        self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=1, dropout_rate=0.1, mha_dropout_rate=0.0,
           dff=self.dim_ft)
         self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float)
 
@@ -91,7 +91,7 @@ class policy(nn.Module):
                         hm_pth = img_pth.replace('rgb/', 'heatmap/').split('.')[0]
                         wd = wd.replace('.', '')
                         hm_pth = os.path.join(hm_pth, wd + '.png')
-                        heatmap = torch.tensor( np.array(Image.open(hm_pth))/125. - 1).to(self.device)
+                        heatmap = torch.tensor( np.array(Image.open(hm_pth))/127.5 - 1).to(self.device)
                         # heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
                         heatmaps.append(heatmap)
 
@@ -143,7 +143,8 @@ class policy(nn.Module):
         out = self.vl_transformer_encoder(feat) # L x (B * l_contact_seq) X ft
         out = torch.mean(out, axis = 0)
         out = out.reshape((self.B, self.L, -1))
-        out = out.permute((1,0,2))
+        print("out shape", out.shape)
+        # out = out.permute((1,0,2))
 
         tp_output = self.tp_transformer(out, padding_mask = padding_mask)
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
@@ -152,9 +153,8 @@ class policy(nn.Module):
         return contact
 
     def forward_lava(self, visual_sentence, fused_x, padding_mask):
-        visual_sentence = visual_sentence.permute((1,0,2)) # pytorch transformer takes L X (B * l_contact_seq) X ft
-        fused_x = fused_x.permute((1,0,2)) # pytorch transformer takes L X (B * l_contact_seq) X ft
-
+        # visual_sentence = visual_sentence.permute((1,0,2)) # pytorch transformer takes L X (B * l_contact_seq) X ft
+        # fused_x = fused_x.permute((1,0,2)) # pytorch transformer takes L X (B * l_contact_seq) X ft
         
         # pos_enc_simple = position_encoding_simple(K= feat.size()[0], M=self.dim_ft, device=self.device) 
         # feat = pos_enc_simple(feat)
@@ -162,10 +162,11 @@ class policy(nn.Module):
         out = self.vl_transformer_encoder(visual_sentence, fused_x) # L x (B * l_contact_seq) X ft
         # out = torch.mean(out, axis = 0)
         out = out.reshape((self.B, self.L, -1))
-        out = out.permute((1,0,2))
+        # out = out.permute((1,0,2))
 
         tp_output = self.tp_transformer(out, padding_mask = padding_mask)
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
+
         w = int(np.sqrt(contact.shape[-1]))
         contact = contact.reshape((self.B, w, w ))
         return contact
@@ -231,21 +232,31 @@ class contact_mlp_decoder(nn.Module):
         self.last_activation = last_activation
 
         self.l1 = nn.Linear(dim_ft, 1024)
-        self.l2 = nn.Linear(1024, 1024)
-        self.l3 = nn.Linear(1024, dim_out)
+        self.l2 = nn.Linear(1024, 2048)
+        self.l3 = nn.Linear(2048, dim_out)
 
+        # nn.init.uniform_(self.l3.weight, 0, 0.05)
+        # nn.init.uniform_(self.l3.bias, 0, 0.05)
+
+
+        # nn.init.kaiming_uniform_(self.l1.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+        # nn.init.kaiming_uniform_(self.l2.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+        # nn.init.kaiming_uniform_(self.l3.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+
+        # kaiming normal best compatible with tanh
         nn.init.kaiming_normal_(self.l1.weight, a=0.0, nonlinearity='relu', mode='fan_in')
         nn.init.kaiming_normal_(self.l2.weight, a=0.0, nonlinearity='relu', mode='fan_in')
         nn.init.kaiming_normal_(self.l3.weight, a=0.0, nonlinearity='relu', mode='fan_in')
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
 
 
     def forward(self, x):
         x = self.relu(self.l1(x))
         x = self.relu(self.l2(x))
-        x_cnt = self.sigmoid(self.l3(x))
+        x_cnt = self.tanh(self.l3(x))
 
         return x_cnt
 

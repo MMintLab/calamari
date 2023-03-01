@@ -46,12 +46,13 @@ class PrenormPixelLangEncoder(nn.Module):
         # residual_lang = lang_x
 
         for _ in range(self.num_layers):
-            pixel_x_ = self.LayerNorm1(pixel_x)
-            lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype))
-            # print(pixel_x_.shape, lang_x_.shape)
+            pixel_x_ = self.LayerNorm1(pixel_x).permute((1,0,2))
+            lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype)).permute((1,0,2))
+
             x2, _ = self.multiheadattention(query = lang_x_, 
                                          key = pixel_x_, 
                                          value = pixel_x_)
+            x2 = x2.permute((1,0,2))
             x2 = self.Dropout(x2)
 
             # Residual, only on the language path.
@@ -106,18 +107,18 @@ class TemporalTransformer(nn.Module):
 
 
     def forward(self, x, padding_mask):
-        x = x.permute((1,0,2)) # BxLxft
         x = self.l1(x)
-        x *= np.sqrt(self.d_model)
+        x *= np.sqrt(self.d_model) # L X B X ft
 
         x = self.PosEmb(x)
         x = self.Dropout(x)
 
         for enc_i in self.PrenormEncoderLayer:
-            x = enc_i(x, padding_mask = padding_mask) # TODO : check input order 
+            x = enc_i(x, padding_mask = padding_mask) # BxLxft - enc_i does permute inside their forward loop
 
+        x = torch.mean(x, dim = 1)
+        # x = torch.flatten(x, 1, 2)
 
-        x = torch.mean(x, axis=1)
         x = self.LayerNorm(x)
         return x
 

@@ -31,8 +31,8 @@ class Config:
         self.seed = 42
 
         # self.train_idx = np.concatenate([np.arange(0,250), np.arange(500,1000)])
-        self.train_idx = np.arange(0,100)
-        self.test_idx = np.arange(290,300)
+        self.train_idx = np.arange(0,45)
+        self.test_idx = np.arange(45,50)
         self.train_s = 10
 
         # self.n_idx = self.get_negative_idxs()
@@ -52,17 +52,12 @@ class Config:
         R_inv = R.T  # inverse of rot matrix is transpose
         R_inv_C = np.matmul(R_inv, C)
         extrinsics = np.concatenate((R_inv, -R_inv_C), -1)
-        self.camera_proj = np.matmul(intrinsics, extrinsics)
-        
-        self.tab_scale = (110,110)
-        self.tab_offset = (0.4, 0.6)
-        self.table_h = 0.5 #496
-
-        # Data dir
-        self.data_dir = 'dataset/heuristics_coarser'
-        self.contact_folder = 'contact_front'
+        self.camera_proj =  np.matmul(intrinsics, extrinsics)
         self.contact_seq_l = 4
         self.txt_cmd = "Use the sponge to clean up the dirt."
+        self.data_dir = 'dataset/heuristics_0228'
+        self.contact_folder = 'contact_front'
+
 
 
 
