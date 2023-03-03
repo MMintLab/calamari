@@ -49,10 +49,7 @@ class ContactEnergy():
         self.test = False if test_idx is None else True
 
         self.optim = torch.optim.Adam(
-            [   {"params" : self.policy.vl_transformer_encoder.parameters()},
-                {"params" : self.policy._image_encoder.parameters()},
-                {"params": self.policy.transformer_decoder.parameters()}, #, "lr":0.005
-                {"params": self.policy.tp_transformer.parameters()}, #, "lr":0.005
+            [   {"params" : self.policy.parameters()}
             ], lr=1e-5)
 
 
@@ -61,7 +58,7 @@ class ContactEnergy():
         contact_histories_ovl = [0 for _ in range(N)]  #self.train_dataLoader.__len__()
 
         tot_loss = 0
-        l_i_hist = []
+        # l_i_hist = []
 
         for data in dataloader:
             l = data["idx"]
@@ -70,10 +67,13 @@ class ContactEnergy():
             traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0)
 
             visual_sentence, fused_x, padding_mask  =  self.policy.input_processing(rgb, TXT)
-            # visual_sentence = torch.amax(visual_sentence, dim = 1, keepdim = True)
-            visual_sentence = torch.flatten(visual_sentence[:,1:,:], start_dim=1, end_dim=2).unsqueeze(1)
 
-            fused_x= torch.stack(fused_x)[:,0,:].unsqueeze(1)
+            # visual_sentence = torch.flatten(visual_sentence[:,1:,:], start_dim=1, end_dim=2).unsqueeze(1)
+            # fused_x= torch.stack(fused_x)[:,0,:].unsqueeze(1)
+
+            visual_sentence = visual_sentence[:,:,:]
+            fused_x= torch.stack(fused_x)
+
             contact_seq = self.policy.forward_lava(visual_sentence, fused_x, padding_mask = padding_mask.to(self.Config.device))
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
@@ -99,7 +99,7 @@ class ContactEnergy():
                         contact_seq_round = round_mask(contact_seq[l_ir].detach().cpu())
                         contact_histories[l_i] = contact_seq_round
                         contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round)
-                        l_i_hist.append(l_i)
+                        # l_i_hist.append(l_i)
                     # l_ir += 1
 
             # self.tot_loss['loss0'] = self.tot_loss['loss0']  + loss0_i.detach().cpu()
@@ -115,11 +115,11 @@ class ContactEnergy():
     def get_energy_field(self):
         for i in range (self.Config.epoch):
             if i % 10 == 5 or i == self.Config.epoch - 1:
-                CE.save_model(i)
+                self.save_model(i)
             
             self.policy.train(True)
             if i % 5 == 0 or i == self.Config.epoch -1: 
-                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = 200)
+                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = 50)
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
                 _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, N = 20)

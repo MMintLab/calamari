@@ -32,7 +32,8 @@ class policy(nn.Module):
 
         ## Input processing for Transformer
         self.explainability = ClipExplainability(self.device)
-        self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(self.dim_ft/8))
+        self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(self.dim_ft))
+        # self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(self.dim_ft/8))
 
         ## Transformer Encoder
         self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=30).to(self.device)
@@ -42,8 +43,8 @@ class policy(nn.Module):
         # self.vl_transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
         # self.vl_transformer_encoder.to(self.device)
 
-        self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=1, dropout_rate=0.1, mha_dropout_rate=0.0,
-          dff=self.dim_ft)
+        self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=2, dropout_rate=0.1, mha_dropout_rate=0.0,
+          dff=self.dim_ft, device= self.Config.device)
         self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float)
 
 
@@ -51,7 +52,7 @@ class policy(nn.Module):
 
         # temporal transformer.
         self.tp_transformer = TemporalTransformer(dim_in=self.dim_ft, d_model = self.dim_ft, sequence_length = self.L, device= self.device)
-        self.model_grd = [self._image_encoder, self.vl_transformer_encoder,  self.transformer_decoder, self.tp_transformer]
+        # self.model_grd = [self._image_encoder, self.vl_transformer_encoder,  self.transformer_decoder, self.tp_transformer]
 
         self.text_embs = self._get_text_emb( self.Config.txt_cmd )
 
@@ -67,6 +68,7 @@ class policy(nn.Module):
         patches = pil_img.unfold(1, patch_size, patch_size).unfold(2, patch_size, patch_size)
         patches = patches.reshape( -1, patch_size, patch_size)
         return patches
+
 
     def read_heatmap_temporal(self, img_batch_pths, texts):
         ## text processing
@@ -91,7 +93,7 @@ class policy(nn.Module):
                         hm_pth = img_pth.replace('rgb/', 'heatmap/').split('.')[0]
                         wd = wd.replace('.', '')
                         hm_pth = os.path.join(hm_pth, wd + '.png')
-                        heatmap = torch.tensor( np.array(Image.open(hm_pth))/127.5 - 1).to(self.device)
+                        heatmap = torch.tensor( np.array(Image.open(hm_pth))).to(self.device)
                         # heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
                         heatmaps.append(heatmap)
 
@@ -160,7 +162,7 @@ class policy(nn.Module):
         # feat = pos_enc_simple(feat)
 
         out = self.vl_transformer_encoder(visual_sentence, fused_x) # L x (B * l_contact_seq) X ft
-        # out = torch.mean(out, axis = 0)
+        out = torch.mean(out, axis = 1) # TODO: remove?
         out = out.reshape((self.B, self.L, -1))
         # out = out.permute((1,0,2))
 
@@ -231,9 +233,11 @@ class contact_mlp_decoder(nn.Module):
         super(contact_mlp_decoder, self).__init__()
         self.last_activation = last_activation
 
-        self.l1 = nn.Linear(dim_ft, 1024)
-        self.l2 = nn.Linear(1024, 2048)
-        self.l3 = nn.Linear(2048, dim_out)
+        self.l1 = nn.Linear(dim_ft, 512)
+        self.l2 = nn.Linear(512, 1024)
+        self.l3 = nn.Linear(1024, 2048)
+        # self.l4 = nn.Linear(2048, 4096)
+        self.l4 = nn.Linear(2048, dim_out)
 
         # nn.init.uniform_(self.l3.weight, 0, 0.05)
         # nn.init.uniform_(self.l3.bias, 0, 0.05)
@@ -247,6 +251,9 @@ class contact_mlp_decoder(nn.Module):
         nn.init.kaiming_normal_(self.l1.weight, a=0.0, nonlinearity='relu', mode='fan_in')
         nn.init.kaiming_normal_(self.l2.weight, a=0.0, nonlinearity='relu', mode='fan_in')
         nn.init.kaiming_normal_(self.l3.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+        nn.init.kaiming_normal_(self.l4.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+        # nn.init.kaiming_normal_(self.l5.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -256,7 +263,11 @@ class contact_mlp_decoder(nn.Module):
     def forward(self, x):
         x = self.relu(self.l1(x))
         x = self.relu(self.l2(x))
-        x_cnt = self.tanh(self.l3(x))
+        x = self.relu(self.l3(x))
+        # x = self.relu(self.l4(x))
+
+        x_cnt = self.sigmoid(self.l4(x))
+
 
         return x_cnt
 

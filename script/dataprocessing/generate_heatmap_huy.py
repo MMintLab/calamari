@@ -31,7 +31,7 @@ def generate_heatmap(
         os.mkdir(save_folder_) 
     else:
         print(save_folder_, "exists")
-        return
+        # return
 
     assert img.dtype == np.uint8
     h, w, c = img.shape
@@ -67,14 +67,14 @@ def generate_heatmap(
 if __name__ == '__main__':
     import os
     keywords = ["Use","the", "sponge" ,"to" ,"clean" ,"up", "the" ,"dirt"]
-    data_origrin = "dataset/keyframes"
+    data_origrin = "dataset/heuristics_0228"
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
 
     dir_list = []
     for tf in trial_folder:
         data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_cont')
+        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 

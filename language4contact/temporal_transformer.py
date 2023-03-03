@@ -21,11 +21,16 @@ class PrenormPixelLangEncoder(nn.Module):
     def __init__(self, num_layers: int = 2, num_heads: int=2, dropout_rate: float = 0.1,
                  dff: int =128, mha_dropout_rate: float = 0.0, device: int = 'cpu'):
         super(PrenormPixelLangEncoder, self).__init__()
+        self.device = device
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.dff = dff
         self.dropout_rate = dropout_rate
         self.mha_dropout_rate = mha_dropout_rate
+        self.sequence_length = 15
+
+        self.pixel_PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
+        self.lang_PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
 
         self.multiheadattention = nn.MultiheadAttention(embed_dim = self.dff, num_heads = self.num_heads, dropout=self.mha_dropout_rate)
         self.Dropout = nn.Dropout(p = self.dropout_rate)
@@ -44,6 +49,8 @@ class PrenormPixelLangEncoder(nn.Module):
 
     def forward(self, pixel_x, lang_x):
         # residual_lang = lang_x
+        pixel_x = self.pixel_PosEmb(pixel_x)
+        lang_x = self.lang_PosEmb(lang_x)
 
         for _ in range(self.num_layers):
             pixel_x_ = self.LayerNorm1(pixel_x).permute((1,0,2))

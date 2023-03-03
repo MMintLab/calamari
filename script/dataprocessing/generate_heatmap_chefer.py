@@ -1,11 +1,20 @@
-# from language4contact.semantic_abstraction.generate_relevancy import *
-from language4contact.modules_shared import *
+import os
+from argparse import ArgumentParser
+
 import imageio
 from PIL import Image
 
-TXT  = "Use the sponge to clean up the dirt."
-os.environ["CUDA_VISIBLE_DEVICES"] = str(2)
+# from language4contact.semantic_abstraction.generate_relevancy import *
+from language4contact.modules_shared import *
+from language4contact.config.config_multi import Config
+import language4contact.utils as utils
 
+# Get arguments.
+parser = ArgumentParser()
+parser.add_argument("--task", type=str)
+args = parser.parse_args()
+
+os.environ["CUDA_VISIBLE_DEVICES"] = str(2)
 torch.cuda.set_device("cuda:2")
 device = 'cuda'
 explainability = ClipExplainability(device)
@@ -31,16 +40,21 @@ def generate_heatmap(file_path, labels, save_folder, prompts=["a picture of a {}
 
         heatmap = explainability.show_image_relevance(R_image, img, orig_image=img) #pilimage open
         heatmap = heatmap.detach().cpu().numpy()
-        img = Image.fromarray(np.uint8(heatmap*255))
+        img = Image.fromarray(np.uint8(heatmap*100))
         img.save(os.path.join(save_folder_,f"{label}.png"))
         print("saved image in", os.path.join(save_folder_,f"{label}.png"))
 
 
 
 if __name__ == '__main__':
-    import os
-    keywords = ["Use the sponge to clean up the dirt", "Use","the", "sponge" ,"to" ,"clean" ,"up", "the" ,"dirt"]
-    data_origrin = "dataset/heuristics_0228"
+
+    config = Config()
+    dataset_config = config.dataset_config[args.task]
+    txt = dataset_config["txt_cmd"]
+    keywords = utils.sentence2words(txt)
+    keywords.insert(0, txt)
+    
+    data_origrin = dataset_config["data_dir"] #"dataset/heuristics_0228"
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
 
