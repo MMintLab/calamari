@@ -14,8 +14,16 @@ from .Transformer_MM_Explainability.CLIP import clip
 
 
 def sentence2words(s):
-    s = s.replace('.', '')
-    words = s.split(' ')
+    if type(s) == list:
+        words = []
+        for s_i in s:
+            s_i = s_i.replace('.', '')
+            words.append(s_i.split(' '))
+
+        
+    elif type(s) == str:
+        s = s.replace('.', '')
+        words = s.split(' ')
     return words
 
 

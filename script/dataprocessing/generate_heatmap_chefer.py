@@ -4,6 +4,10 @@ from argparse import ArgumentParser
 import imageio
 from PIL import Image
 
+'''
+Chefer's method resize the original image shape to 224 x 224
+'''
+
 # from language4contact.semantic_abstraction.generate_relevancy import *
 from language4contact.modules_shared import *
 from language4contact.config.config_multi import Config
@@ -27,7 +31,7 @@ def generate_heatmap(file_path, labels, save_folder, prompts=["a picture of a {}
         os.mkdir(save_folder_) 
     else:
         print(save_folder_, "exists")
-        return
+        # return
     
     for label in keywords:
         text = clip.tokenize(label).to(device)
@@ -42,7 +46,6 @@ def generate_heatmap(file_path, labels, save_folder, prompts=["a picture of a {}
         heatmap = heatmap.detach().cpu().numpy()
         img = Image.fromarray(np.uint8(heatmap*100))
         img.save(os.path.join(save_folder_,f"{label}.png"))
-        print("saved image in", os.path.join(save_folder_,f"{label}.png"))
 
 
 

@@ -19,7 +19,7 @@ import language4contact.utils as utils
 from functools import partial
 from typing import Any, Callable, List, Optional, Type, Union
 from .resnet import ResNet, ResidualBlock
-from config.config import Config
+from language4contact.config.config import Config
 
 class policy(nn.Module):
     def __init__(self,  dim_in, dim_out, image_size = 255, Config:Config =None):
@@ -73,7 +73,13 @@ class policy(nn.Module):
     def read_heatmap_temporal(self, img_batch_pths, texts):
         ## text processing
         words = sentence2words(texts)
-        words.insert(0, texts)
+
+        if self.Config.heatmap_type == 'chefer':
+            cnt_dir = 'heatmap/'
+            words.insert(0, texts)
+
+        elif self.Config.heatmap_type == 'huy':
+            cnt_dir = 'heatmap_huy/'
         
         txt_emb = self.text_embs
         # text = clip.tokenize(words).to(self.device)
@@ -90,10 +96,12 @@ class policy(nn.Module):
                 if len(img_pth) > 0:
                     heatmaps = []
                     for wd in words:
-                        hm_pth = img_pth.replace('rgb/', 'heatmap/').split('.')[0]
+                        hm_pth = img_pth.replace('rgb/', cnt_dir).split('.')[0]
                         wd = wd.replace('.', '')
                         hm_pth = os.path.join(hm_pth, wd + '.png')
-                        heatmap = torch.tensor( np.array(Image.open(hm_pth))).to(self.device)
+                        heatmap = Image.open(hm_pth).resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
+                        heatmap = torch.tensor( np.array(heatmap)).to(self.device)
+
                         # heatmap = self.show_image_relevance(R_image[i], img, orig_image=img) #pilimage open
                         heatmaps.append(heatmap)
 

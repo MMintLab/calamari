@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from language4contact.utils import *
 from language4contact.modules_temporal import  policy
-from config.config import Config
+from language4contact.config.config import Config
 from language4contact.dataset_temporal import DatasetTemporal as Dataset
 from torch.utils.data import DataLoader
 
@@ -73,6 +73,7 @@ class ContactEnergy():
 
             visual_sentence = visual_sentence[:,:,:]
             fused_x= torch.stack(fused_x)
+            # print(visual_sentence.shape, fused_x.shape)
 
             contact_seq = self.policy.forward_lava(visual_sentence, fused_x, padding_mask = padding_mask.to(self.Config.device))
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
@@ -163,11 +164,15 @@ class ContactEnergy():
         self._save_script_log(logdir)
     
     def _save_script_log(self, logdir):
-        save_script('script/contact2seq_front_feedback.py', logdir)
-        save_script('language4contact/modules.py', logdir)
-        save_script('language4contact/utils.py', logdir)
-        save_script('language4contact/loss.py', logdir)
-        save_script('config/config.py', logdir)
+        # get the file directory.
+        filename = os.path.realpath(__file__).split('/')[-1]
+
+
+        save_script(f'script/{filename}', logdir)
+        # save_script('language4contact/modules.py', logdir)
+        # save_script('language4contact/utils.py', logdir)
+        # save_script('language4contact/loss.py', logdir)
+        save_script('language4contact/config/config.py', logdir)
 
 
     def write_tensorboard_test(self, step, contact, contact_ovl, loss0):

@@ -1,6 +1,9 @@
 from language4contact.semantic_abstraction.generate_relevancy import *
 from PIL import Image
+'''
+Huy ha's method preserve original image shape which is 256 x 256
 
+'''
 # TODO: support multiple pretrained model
 
 
@@ -61,7 +64,6 @@ def generate_heatmap(
         # ax.imshow(colored_grad)
         # I8 = (grad).astype(np.uint8)
         img = Image.fromarray(np.uint8(grad*255))
-        print(save_folder_)
         img.save(os.path.join(save_folder_,f"{label}.png"))
 
 if __name__ == '__main__':
