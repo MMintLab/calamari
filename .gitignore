@@ -7,5 +7,6 @@ language4contact.egg-info/
 *.png
 *.jpg
 *.pth
+*.__pycache__
 /__pycache__/
 language4contact/Transformer_MM_Explainability
