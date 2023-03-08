@@ -19,7 +19,7 @@ https://github.com/google-research/language-table/blob/770dade55237f31b7028dbff4
 """
 class PrenormPixelLangEncoder(nn.Module): 
     def __init__(self, num_layers: int = 2, num_heads: int=2, dropout_rate: float = 0.1,
-                 dff: int =128, mha_dropout_rate: float = 0.0, device: int = 'cpu'):
+                 dff: int =128, mha_dropout_rate: float = 0.0, device: int = 'cpu', sequence_length: int = 16):
         super(PrenormPixelLangEncoder, self).__init__()
         self.device = device
         self.num_layers = num_layers
@@ -27,7 +27,7 @@ class PrenormPixelLangEncoder(nn.Module):
         self.dff = dff
         self.dropout_rate = dropout_rate
         self.mha_dropout_rate = mha_dropout_rate
-        self.sequence_length = 15
+        self.sequence_length = sequence_length # TODO update argument 
 
         self.pixel_PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
         self.lang_PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
@@ -47,7 +47,7 @@ class PrenormPixelLangEncoder(nn.Module):
         nn.init.uniform_(self.l6.weight, 0, 0.05)
         nn.init.uniform_(self.l6.bias, 0, 0.05)
 
-    def forward(self, pixel_x, lang_x):
+    def forward(self, pixel_x, lang_x, padding_mask):
         # residual_lang = lang_x
         pixel_x = self.pixel_PosEmb(pixel_x)
         lang_x = self.lang_PosEmb(lang_x)
@@ -58,7 +58,8 @@ class PrenormPixelLangEncoder(nn.Module):
 
             x2, _ = self.multiheadattention(query = lang_x_, 
                                          key = pixel_x_, 
-                                         value = pixel_x_)
+                                         value = pixel_x_,
+                                         key_padding_mask = padding_mask)
             x2 = x2.permute((1,0,2))
             x2 = self.Dropout(x2)
 

@@ -1,7 +1,7 @@
 from language4contact.semantic_abstraction.generate_relevancy import *
 from PIL import Image
 '''
-Huy ha's method preserve original image shape which is 256 x 256
+Huy ha's method preserve original image shape which is 256
 
 '''
 # TODO: support multiple pretrained model
