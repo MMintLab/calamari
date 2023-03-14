@@ -2,6 +2,9 @@ from argparse import ArgumentParser
 from datetime import datetime
 
 from tqdm import tqdm
+import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2, 3"
 
 from language4contact.utils import *
 from language4contact.modules_temporal_multi import  policy
@@ -15,10 +18,12 @@ parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
 
 args = parser.parse_args()
-
 TXT  = "Use the sponge to clean up the dirt."
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-torch.cuda.set_device("cuda:"+args.gpu_id)
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,3"
+
+# device = torch.device("cuda:0,2" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
+
+torch.cuda.set_device(f"cuda:{args.gpu_id}")
 # torch.cuda.set_device(1)
 
 class ContactEnergy():
@@ -45,7 +50,8 @@ class ContactEnergy():
 
         ## Define policy model
         dimout = self.train_dataset.cnt_w * self.train_dataset.cnt_h
-        self.policy = policy(dim_in = self.train_dataset.cnt_w, dim_out= dimout, image_size = self.train_dataset.cnt_w, Config=self.Config).cuda()
+        self.policy = policy(dim_in = self.train_dataset.cnt_w, dim_out= dimout, image_size = self.train_dataset.cnt_w, Config=self.Config)
+        self.policy = nn.DataParallel(self.policy.to(self.Config.device),device_ids=[1,2])
 
         ## Set optimizer
         self.test = False if test_idx is None else True
@@ -53,6 +59,7 @@ class ContactEnergy():
         self.optim = torch.optim.Adam(
             [   {"params" : self.policy.parameters()}
             ], lr=1e-5)
+        
 
 
     def feedforward(self, dataloader, write = False, N = 200):
@@ -70,7 +77,7 @@ class ContactEnergy():
             txt = list(data['txt'])
             tasks = list(data["task"])
 
-            visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.input_processing(rgb, txt, tasks)
+            visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks)
 
             # visual_sentence = torch.flatten(visual_sentence[:,1:,:], start_dim=1, end_dim=2).unsqueeze(1)
             # fused_x= torch.stack(fused_x)[:,0,:].unsqueeze(1)
@@ -78,7 +85,7 @@ class ContactEnergy():
             visual_sentence = visual_sentence[:,:,:]
             fused_x= torch.stack(fused_x)
 
-            contact_seq = self.policy.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
+            contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
             # loss
@@ -121,7 +128,7 @@ class ContactEnergy():
             if i % 10 == 5 or i == self.Config.epoch - 1:
                 self.save_model(i)
             
-            self.policy.train(True)
+            self.policy.module.train(True)
             if i % 5 == 0 or i == self.Config.epoch -1: 
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = self.train_dataset.__len__())
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
@@ -131,7 +138,7 @@ class ContactEnergy():
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
             if i % 5 == 0 or i == self.Config.epoch -1: 
-                self.policy.train(False)
+                self.policy.module.train(False)
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.test_dataLoader, write = True, N = self.test_dataset.__len__())
                 self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, tot_loss)
 
@@ -142,7 +149,7 @@ class ContactEnergy():
         #     os.makedirs(path)
         torch.save({"epoch": epoch,
             "path" : self.logdir ,
-            "param" : self.policy.state_dict(),
+            "param" : self.policy.module.state_dict(),
             }, self.logdir + "/policy.pth")
         torch.save({"epoch": epoch,
                     "optim" : self.optim.state_dict()

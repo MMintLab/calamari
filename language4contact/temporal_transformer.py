@@ -102,14 +102,14 @@ class TemporalTransformer(nn.Module):
         # Followed the original config.
         self.Dropout = nn.Dropout(p = 0.1)
         self.PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
-        self.PrenormEncoderLayer = [PrenormEncoderLayer(
+        self.PrenormEncoderLayer = nn.ModuleList([PrenormEncoderLayer(
                                     num_heads=self.num_heads,
                                     dropout_rate=0.1,
                                     mha_dropout_rate=0.0,
                                     dff=self.dff, 
                                     dim_in=self.d_model,
                                     ).to(self.device) for _ in range(self.num_layers)
-                                    ]
+                                    ])
         self.LayerNorm = nn.LayerNorm([self.d_model])
 
 

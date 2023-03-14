@@ -36,7 +36,7 @@ class policy(nn.Module):
         # self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(self.dim_ft/8))
 
         ## Transformer Encoder
-        self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=30).to(self.device)
+        # self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=30).to(self.device)
 
         # # vision language transformer.
         # encoder_layer = nn.TransformerEncoderLayer(d_model=self.dim_ft, dim_feedforward=128, nhead=1) #default: nhead = 8

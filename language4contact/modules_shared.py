@@ -117,7 +117,7 @@ class ClipExplainability(nn.Module):
         dim = int(image_relevance.numel() ** 0.5)
         image_relevance = image_relevance.reshape(1, 1, dim, dim)
         image_relevance = torch.nn.functional.interpolate(image_relevance, size=224, mode='bilinear')
-        image_relevance = image_relevance.reshape(224, 224).cuda().data #.cpu().numpy()
+        image_relevance = image_relevance.reshape(224, 224).data #.cpu().numpy()
 
         image_relevance = (image_relevance - image_relevance.min()) / 0.04
         return image_relevance
