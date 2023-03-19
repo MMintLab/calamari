@@ -33,8 +33,8 @@ class TaskConfig():
                       "txt_cmd": self.language_prompts["scoop"][0],
                       "tool_name": 'spatula',
                       'target_name': 'diningTable',
-                      "train_idx": np.arange(0, 45),
-                      "test_idx": np.arange(45, 50)}
+                      "train_idx": np.arange(0, 95),
+                      "test_idx": np.arange(95, 100)}
             }
 
         self.task_mpc_configs = None

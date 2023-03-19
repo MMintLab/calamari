@@ -126,7 +126,7 @@ class policy(nn.Module):
                             wd = words_i[i].replace('.', '')
 
                             # Load word-wise heatmaps.
-                            hm_pth = img_pth.replace('rgb/', 'heatmap/').split('.')[0]
+                            hm_pth = img_pth.replace('rgb/', cnt_dir).split('.')[0]
                             hm_pth = os.path.join(hm_pth, wd + '.png')
                             heatmap = Image.open(hm_pth).resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
                             heatmap = torch.tensor( np.array(heatmap)).to(self.device)

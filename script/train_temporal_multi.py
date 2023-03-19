@@ -4,7 +4,7 @@ from datetime import datetime
 from tqdm import tqdm
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2, 3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2, 3"
 
 from language4contact.utils import *
 from language4contact.modules_temporal_multi import  policy
@@ -18,7 +18,7 @@ parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
 
 args = parser.parse_args()
-TXT  = "Use the sponge to clean up the dirt."
+# TXT  = "Use the sponge to clean up the dirt."
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0,3"
 
 # device = torch.device("cuda:0,2" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
@@ -55,11 +55,19 @@ class ContactEnergy():
 
         ## Set optimizer
         self.test = False if test_idx is None else True
-
         self.optim = torch.optim.Adam(
-            [   {"params" : self.policy.parameters()}
-            ], lr=1e-5)
+                [   {"params" : self.policy.parameters()}
+                ], lr=1e-5)
         
+
+        # logdir = 'logs/multi/20230317-235231/policy.pth'
+        # pretrained = torch.load(logdir, map_location=torch.device('cpu'))
+        # print(pretrained.keys())
+        # self.policy.module.load_state_dict(pretrained["param"])
+        # self.optim.load_state_dict(pretrained["optim"])
+
+
+
 
 
     def feedforward(self, dataloader, write = False, N = 200):
@@ -177,7 +185,14 @@ class ContactEnergy():
         # get the file directory.
         filename = os.path.realpath(__file__).split('/')[-1]
         save_script(f'script/{filename}', logdir)
-        save_script('language4contact/config/config.py', logdir)
+        save_script('language4contact/config/config_multi.py', logdir)
+        save_script('language4contact/config/task_policy_configs.py', logdir)
+        save_script('language4contact/modules_temporal_multi.py', logdir)
+        save_script('language4contact/modules_temporal.py', logdir)
+        save_script('language4contact/temporal_transformer.py', logdir)
+
+
+
 
 
     def write_tensorboard_test(self, step, contact, contact_ovl, loss0):

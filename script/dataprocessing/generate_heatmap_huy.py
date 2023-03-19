@@ -39,12 +39,17 @@ def generate_heatmap(
     assert img.dtype == np.uint8
     h, w, c = img.shape
     start = time()
+
+    # for _ in range(2):
     grads = ClipWrapper.get_clip_saliency(
         img=img,
         text_labels=np.array(labels),
         prompts=prompts,
         **saliency_configs["ours"](h),
     )[0]
+        # print(torch.sum(grads))
+        
+    # return
     print(f"get gradcam took {float(time() - start)} seconds", grads.shape)
     grads -= grads.mean(axis=0)
     grads = grads.cpu().numpy()
@@ -54,9 +59,9 @@ def generate_heatmap(
     # cmap = plt.get_cmap("jet")
     vmax = 0.020
     for ax, label_grad, label in zip(axes, grads, labels):
-        ax.axis("off")
-        ax.imshow(img)
-        ax.set_title(label, fontsize=12)
+        # ax.axis("off")
+        # ax.imshow(img)
+        # ax.set_title(label, fontsize=12)
         grad = np.clip((label_grad - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
         # colored_grad = cmap(grad)
         # grad = 1 - grad
@@ -68,8 +73,15 @@ def generate_heatmap(
 
 if __name__ == '__main__':
     import os
-    keywords = ["Use","the", "sponge" ,"to" ,"clean" ,"up", "the" ,"dirt"]
-    data_origrin = "dataset/heuristics_0228"
+    keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt", "block"]
+    keywords = ["Use","the","broom","to","brush","dirt","into","dustpan"]
+    # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
+
+    
+    # data_origrin = "dataset/heuristics_0228"
+    # data_origrin = "dataset/scoop_spatula_"
+    data_origrin = "dataset/sweep_to_dustpan"
+
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
 

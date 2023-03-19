@@ -75,7 +75,7 @@ class Config:
         #         "test_idx": np.arange(45,50),}}
         
         self.heatmap_size = (224,224) # Resize the heatmap by this size
-        self.heatmap_type = 'chefer'
+        self.heatmap_type = 'huy' # 'chefer'
         self.data_dir = 'dataset/heuristics_coarser'
         self.contact_folder = 'contact_front'
         self.contact_seq_l = 4
