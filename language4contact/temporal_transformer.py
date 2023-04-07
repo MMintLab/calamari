@@ -49,9 +49,10 @@ class PrenormPixelLangEncoder(nn.Module):
 
     def forward(self, pixel_x, lang_x, padding_mask):
         # residual_lang = lang_x
+
         pixel_x = self.pixel_PosEmb(pixel_x)
         lang_x = self.lang_PosEmb(lang_x)
-
+                   
         for _ in range(self.num_layers):
             pixel_x_ = self.LayerNorm1(pixel_x).permute((1,0,2))
             lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype)).permute((1,0,2))

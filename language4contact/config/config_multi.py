@@ -54,26 +54,7 @@ class Config:
         self.max_sentence_l = 16
         self.task_confg = TaskConfig()
         self.dataset_config = self.task_confg.task_policy_configs
-        # {"wipe":{ 
-        #     "data_dir": "dataset/heuristics_coarser",
-        #     "contact_folder": 'contact_front',
-        #     "txt_cmd": "Use the sponge to clean up the dirt.",
-        #     "train_idx": np.arange(0,100),
-        #     "test_idx": np.arange(195,200),
-        #     },                          
-        #     "sweep":{
-        #         "data_dir":"dataset/sweep_to_dustpan",
-        #         "contact_folder": 'contact_front',
-        #         "txt_cmd": "Use the broom to brush the dirt into the dustpan",
-        #         "train_idx": np.arange(0,45),
-        #         "test_idx": np.arange(45,50),
-        #     },
-        #     "scoop":{"data_dir":"dataset/scoop_spatula",
-        #         "contact_folder": 'contact_front',
-        #         "txt_cmd": "Scoop up the block and lift it with the spatula",
-        #         "train_idx": np.arange(0,45),
-        #         "test_idx": np.arange(45,50),}}
-        
+
         self.heatmap_size = (224,224) # Resize the heatmap by this size
         self.heatmap_type = 'huy' # 'chefer'
         self.data_dir = 'dataset/heuristics_coarser'

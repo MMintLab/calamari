@@ -5,7 +5,9 @@ Huy ha's method preserve original image shape which is 256
 
 '''
 # TODO: support multiple pretrained model
-
+# os.environ["CUDA_VISIBLE_DEVICES"] = str(2)
+torch.cuda.set_device("cuda:1")
+device = 'cuda'
 
 ## semantic version
 @app.command()
@@ -51,7 +53,7 @@ def generate_heatmap(
         
     # return
     print(f"get gradcam took {float(time() - start)} seconds", grads.shape)
-    grads -= grads.mean(axis=0)
+    
     grads = grads.cpu().numpy()
     fig, axes = plt.subplots(3, 3)
     axes = axes.flatten()
@@ -62,6 +64,7 @@ def generate_heatmap(
         # ax.axis("off")
         # ax.imshow(img)
         # ax.set_title(label, fontsize=12)
+        label_grad -= label_grad.mean(axis=0)
         grad = np.clip((label_grad - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
         # colored_grad = cmap(grad)
         # grad = 1 - grad
@@ -74,16 +77,17 @@ def generate_heatmap(
 if __name__ == '__main__':
     import os
     keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt", "block"]
-    keywords = ["Use","the","broom","to","brush","dirt","into","dustpan"]
+    # keywords = ["Use","the","broom","to","brush","dirt","into","dustpan"]
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
 
     
-    # data_origrin = "dataset/heuristics_0228"
+    data_origrin = "dataset/heuristics_0228"
     # data_origrin = "dataset/scoop_spatula_"
-    data_origrin = "dataset/sweep_to_dustpan"
+    # data_origrin = "dataset/sweep_to_dustpan"
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
+    # trial_folder = trial_folder[200:]
 
     dir_list = []
     for tf in trial_folder:

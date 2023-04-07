@@ -97,7 +97,9 @@ class policy(nn.Module):
         heatmaps_batch = []
         img_batch = []
         tp_masks = []
-        vl_masks = torch.zeros((self.B, self.L, self.Config.max_sentence_l))
+        vl_masks = torch.ones((self.B, self.L, self.Config.max_sentence_l))
+        txt_emb_batch = torch.zeros((self.B, self.L, self.Config.max_sentence_l, 512)).to(self.device)
+        heatmaps_batch = torch.zeros((self.B, self.L, self.Config.max_sentence_l, self.Config.heatmap_size[0], self.Config.heatmap_size[1])).to(self.device)
 
         # print(img_batch_pths)
         for b, img_pths in enumerate(img_batch_pths):
@@ -108,7 +110,8 @@ class policy(nn.Module):
             # Read Texts as a token.
             txt_emb_i = torch.zeros((self.Config.max_sentence_l, 512)).to(self.device)
             txt_emb_i[:len(self.text_embs[task_i])] = self.text_embs[task_i]
-            
+
+            txt_emb_batch[b] = txt_emb_i.unsqueeze(0).repeat((txt_emb_batch.shape[1], 1, 1)) 
 
 
             for l, img_pth in enumerate(img_pths):
@@ -133,34 +136,37 @@ class policy(nn.Module):
                             heatmaps.append(heatmap)
 
                             # vl transformer mask = 0 : Real Input.
-                            vl_masks[b,l,i] = 0
+                            vl_masks[b, -(l+1),i] = 0
                         
                         else:
                             # Fake (Padding) VL-transformer Inputs.
                             padding = torch.zeros_like(heatmaps[-1]).to(self.device)
                             heatmaps.append(padding)
-                            vl_masks[b,l,i] = 1
+                            vl_masks[b, -(l+1),i] = 1
 
                     # Real Temporal-transformer Inputs.   
-                    txt_emb_batch.append(txt_emb_i)
-                    heatmaps_batch.append( torch.stack(heatmaps))
-                    tp_mask.append(0)
+                    # txt_emb_batch.insert(0, txt_emb_i)
+                    # txt_emb_batch[b,-(l+1),:] = txt_emb_i
+                    heatmaps_batch[b,-(l+1),:] = torch.stack(heatmaps)
+                    # heatmaps_batch.insert( 0,torch.stack(heatmaps))
+                    tp_mask.insert(0, 0)
 
                 elif len(img_pth) == 0: 
                     # Fake (Padding) Temporal-transformer Inputs.
-                    txt_emb_i = torch.zeros_like(txt_emb_batch[0]).to(self.device)
-                    heatmaps = torch.zeros_like(heatmaps_batch[0]).to(self.device)
-                    txt_emb_batch.append(txt_emb_i)
-                    heatmaps_batch.append(heatmaps)
-                    tp_mask.append(1)
+                    # txt_emb_i = torch.zeros_like(txt_emb_batch[0,0,...]).to(self.device)
+                    # heatmaps = torch.zeros_like(heatmaps_batch[0,0,...]).to(self.device)
+                    # txt_emb_batch.insert(0,txt_emb_i)
+                    # heatmaps_batch.insert(0,heatmaps)
+                    tp_mask.insert(0,1)
 
             tp_masks.append(tp_mask)
 
         # Formatting.
-        heatmap_batch = torch.stack(heatmaps_batch)
+        # heatmap_batch_ = torch.stack(heatmaps_batch)
+        heatmap_batch_ = torch.flatten(heatmaps_batch, 0, 1)
         vl_masks = torch.flatten(vl_masks, 0, 1).to(self.device) # Match heatmap size.
         tp_masks = torch.tensor(tp_masks).to(self.device)
-        return txt_emb_batch, heatmap_batch, vl_masks.bool(), tp_masks.bool()
+        return txt_emb_batch, heatmap_batch_, vl_masks.bool(), tp_masks.bool()
     
     def input_processing(self, img, texts, tasks, mode = 'train'):
         """
@@ -175,16 +181,33 @@ class policy(nn.Module):
         heatmaps : (B*l_temp) X l_lang x 225x225
         """
         
-        seg_idx = [0]
         hm_emb = []
 
         ## Get clip attention
-        img_enc_inp = torch.flatten(heatmaps, 0, 1).unsqueeze(1).float()
-        inp = self._image_encoder(img_enc_inp)
-        inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
-        seg_idx += [1] * inp.shape[1]
-        seg_idx = torch.tensor(seg_idx).repeat(inp.shape[0]).to(self.device)
+        heatmaps_ = heatmaps[ ~vl_mask[:,0]]
+        img_enc_inp = torch.flatten(heatmaps_, 0, 1).unsqueeze(1).float()
+        out = self._image_encoder(img_enc_inp)
 
+        inp = torch.zeros((heatmaps.shape[0], heatmaps.shape[1], out.shape[-1])).to(self.Config.device)
+        inp[ ~vl_mask[:,0]] = out.reshape((heatmaps_.shape[0], heatmaps.shape[1], out.shape[-1]))
+
+
+        # breakpoint()
+        # print(img_enc_inp)
+
+        # # inp = torch.where(torch.flatten(vl_mask, 0, 1).repeat((1, inp.shape[1])), inp, torch.zeros_like(inp).to(self.Config.device))
+        # vl_mask_= vl_mask.unsqueeze(1).repeat((1, inp.shape[1])) # 1 padding
+        # inp = torch.where(vl_mask_, torch.ones_like(inp).to(self.Config.device),  inp)
+
+        # print(vl_mask.tolist(), np.sum(heatmaps.detach().cpu().numpy(), axis = (-1, -2)).tolist())
+
+
+        inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
+        
+        # print(inp.detach().cpu().numpy()[:,:,0].tolist())
+
+        # print(inp)
+        # print("lang", txt_emb)
         return inp, txt_emb, vl_mask, tp_mask
 
 
@@ -194,6 +217,16 @@ class policy(nn.Module):
         
         # pos_enc_simple = position_encoding_simple(K= feat.size()[0], M=self.dim_ft, device=self.device) 
         # feat = pos_enc_simple(feat)
+        # print(vl_mask.shape)
+
+        # visual_sentence = visual_sentence[bidx, lidx].reshape(vl_mask.shape[0], -1)
+        # fused_x = fused_x[bidx, lidx].reshape(vl_mask.shape[0], -1)
+        # img_enc_inp = torch.flatten(heatmaps, 0, 1)[bidx].unsqueeze(1).float()
+        # inp_[bidx] = inp
+
+        visual_sentence = visual_sentence[ ~vl_mask[:,0]]
+        fused_x = fused_x[ ~vl_mask[:,0]]
+        vl_mask_ = vl_mask[ ~vl_mask[:,0]]
 
         visual_sentence = self.vis_layer_norm(visual_sentence)
         visual_sentence = self.vis_dim_reducer(visual_sentence)
@@ -201,10 +234,15 @@ class policy(nn.Module):
         fused_x = self.lang_layer_norm(fused_x)
         fused_x = self.lang_dim_reducer(fused_x)
 
-        out = self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask) # L x (B * l_contact_seq) X ft
-        out = torch.mean(out, axis = 1) # TODO: remove?
-        out = out.reshape((self.B, self.L, -1))
-        # out = out.permute((1,0,2))
+        # out = self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_) # L x (B * l_contact_seq) X ft
+        # out = torch.mean(out, axis = 1) # TODO: remove?
+        
+        out = torch.zeros((self.B * self.L, visual_sentence.shape[-1])).to(self.Config.device)
+        out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_), axis = 1)
+        out = out.reshape((self.B , self.L, visual_sentence.shape[-1]))
+
+        tp_mask_tmp= tp_mask.unsqueeze(2).repeat((1, 1, out.shape[-1])) # 1 padding
+        out = torch.where(tp_mask_tmp, torch.zeros_like(out).to(self.Config.device),  out)
 
         tp_output = self.tp_transformer(out, padding_mask = tp_mask)
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
@@ -212,59 +250,6 @@ class policy(nn.Module):
         w = int(np.sqrt(contact.shape[-1]))
         contact = contact.reshape((self.B, w, w ))
         return contact
-
-    def input_processing_from_heatmap(self, heatmap_folder:str, sentence: List[str]):
-
-        ## Encode image and texts with CLIP
-        text_token = clip.tokenize(sentence).to(self.device)
-        text_emb = self.explainability.model.encode_text(text_token)
-        texts = utils.sentence2words(sentence)
-
-        # Record config.
-        self.B = len(heatmap_folder)
-        self.L = 1 + len(texts)
-
-
-        heat_map_batch = []
-        src_padding_mask_batch = []
-        for hm_folder_i in heatmap_folder:
-            heatmaps = []
-            src_padding_masks = [0]
-            for idx, txt in enumerate(texts):
-                pilimage = torch.tensor(np.array(Image.open(os.path.join(hm_folder_i, txt + ".png")).resize((224, 224))))
-
-                heatmaps.append(pilimage) 
-
-                # # All zero image = Padding
-                if torch.sum(pilimage) ==0 :
-                    src_padding_masks.append(1)
-                else:
-                    src_padding_masks.append(0)
-            heat_map_batch.append(torch.stack(heatmaps, dim = 0))
-            src_padding_mask_batch.append(src_padding_masks)
-
-
-        heat_map_batch = torch.stack(heat_map_batch).to(self.device)
-        heat_map_batch = utils.image_reg_255(heat_map_batch)
-
-
-        seg_idx = [0]
-        hm_emb = []
-
-        ## Get clip attention
-        img_enc_inp_2 = torch.flatten(heat_map_batch, 0, 1).unsqueeze(1).float() #[320, 1, 256, 256]
-        
-        inp = self._image_encoder(img_enc_inp_2)
-        inp = inp.reshape(( heat_map_batch.shape[0], heat_map_batch.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
-        
-        text_emb = text_emb.unsqueeze(0).repeat((heat_map_batch.shape[0], 1, 1))
-        inp = torch.cat([text_emb, inp], dim = 1)
-        
-        seg_idx += [1] * heat_map_batch.shape[1]
-        seg_idx = torch.tensor(seg_idx).repeat(heat_map_batch.shape[0]).to(self.device)
-
-        return inp, seg_idx, text_token, torch.tensor(src_padding_mask_batch).bool().to(self.device)
-
 
 
 

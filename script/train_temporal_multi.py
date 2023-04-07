@@ -70,7 +70,7 @@ class ContactEnergy():
 
 
 
-    def feedforward(self, dataloader, write = False, N = 200):
+    def feedforward(self, dataloader, write = False, N = 200, mode = 'train'):
         contact_histories = [0 for _ in range(N)] #self.train_dataLoader.__len__()
         contact_histories_ovl = [0 for _ in range(N)]  #self.train_dataLoader.__len__()
 
@@ -84,25 +84,25 @@ class ContactEnergy():
             traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0)
             txt = list(data['txt'])
             tasks = list(data["task"])
-
+            
+            # inp, txt_emb, vl_mask, tp_mask
             visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks)
-
-            # visual_sentence = torch.flatten(visual_sentence[:,1:,:], start_dim=1, end_dim=2).unsqueeze(1)
-            # fused_x= torch.stack(fused_x)[:,0,:].unsqueeze(1)
-
-            visual_sentence = visual_sentence[:,:,:]
-            fused_x= torch.stack(fused_x)
-
+            fused_x = torch.flatten(fused_x, 0, 1)
+            # breakpoint()
+            
             contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
+            # print(contact_seq)
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
             # loss
             loss0_i = torch.norm( traj_cnt_img.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
             # print(loss0_i,  torch.norm(traj_cnt_img.to(self.Config.device)), torch.norm(contact_seq.to(self.Config.device)))
             loss0_i = 1e6 * loss0_i
-            self.optim.zero_grad()
-            loss0_i.backward()
-            self.optim.step()
+            
+            if mode == 'train':
+                self.optim.zero_grad()
+                loss0_i.backward()
+                self.optim.step()
 
             if write:
                 rgb = zip(*data['traj_rgb_paths'])
@@ -138,7 +138,10 @@ class ContactEnergy():
             
             self.policy.module.train(True)
             if i % 5 == 0 or i == self.Config.epoch -1: 
-                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, write = True, N = self.train_dataset.__len__())
+                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, 
+                                                                                      write = True,
+                                                                                        N = self.train_dataset.__len__(),
+                                                                                        mode = 'train')
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
                 _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, N = 60)
@@ -147,7 +150,10 @@ class ContactEnergy():
 
             if i % 5 == 0 or i == self.Config.epoch -1: 
                 self.policy.module.train(False)
-                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.test_dataLoader, write = True, N = self.test_dataset.__len__())
+                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.test_dataLoader, 
+                                                                                      write = True, 
+                                                                                      N = self.test_dataset.__len__(),
+                                                                                      mode = 'test')
                 self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, tot_loss)
 
 
