@@ -113,9 +113,13 @@ class TemporalTransformer(nn.Module):
                                     ])
         self.LayerNorm = nn.LayerNorm([self.d_model])
 
+        # May or May not be used
+        self.l2 = nn.Linear(self.dff * 4, self.dff * 4)
+        nn.init.uniform_(self.l2.weight, 0, 0.05)
+        nn.init.uniform_(self.l2.bias, 0, 0.05)
 
 
-    def forward(self, x, padding_mask):
+    def forward(self, x, padding_mask, type = 'stack'):
         x = self.l1(x)
         x *= np.sqrt(self.d_model) # L X B X ft
 
@@ -125,11 +129,16 @@ class TemporalTransformer(nn.Module):
         for enc_i in self.PrenormEncoderLayer:
             x = enc_i(x, padding_mask = padding_mask) # BxLxft - enc_i does permute inside their forward loop
 
-        x = torch.mean(x, dim = 1)
-        # x = torch.flatten(x, 1, 2)
+        if type == 'stack':
+            x = torch.flatten(x, -2, -1)
+            x = self.l2(x)
+            return x
+        else:
+            x = torch.mean(x, dim = 1)
+            # x = torch.flatten(x, 1, 2)
 
-        x = self.LayerNorm(x)
-        return x
+            x = self.LayerNorm(x)
+            return x
 
 
 class PrenormEncoderLayer(nn.Module):

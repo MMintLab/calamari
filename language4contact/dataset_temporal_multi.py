@@ -104,7 +104,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         return w, h
 
     def __getitem__(self, idx):
-
+        flip = np.random.randint(0, 2)
         traj_rgb_lst = self.data_summary[idx]["traj_rgb_paths"]
         traj_cnt_lst = self.data_summary[idx]["traj_cnt_paths"]
         txt = self.data_summary[idx]["txt"]
@@ -114,9 +114,19 @@ class DatasetTemporal(torch.utils.data.Dataset):
         traj_cnt_img = fn2img(traj_cnt_lst, d = 1)
         mask_ = get_traj_mask(traj_cnt_lst)
         mask_t = torch.tensor(mask_).to(self.Config.device)
+        
+        if flip:
+            traj_cnt_img =  torch.flip( torch.stack(traj_cnt_img), (-1,))
+            traj_cnt_img = [traj_cnt_img[0]]
+            mask_t =  torch.flip(mask_t, (-1,))
+        
+        # print(torch.stack(trajcnt_img).shape)
+
 
         # print(traj_rgb_lst,traj_cnt_lst )
-        return   {"traj_rgb_paths": traj_rgb_lst, 
+        return   {
+                "flip": torch.tensor(flip),
+                "traj_rgb_paths": traj_rgb_lst, 
                 "traj_cnt_paths": traj_cnt_lst, 
                 "traj_cnt_img": traj_cnt_img, 
                 "mask_t": mask_t, 

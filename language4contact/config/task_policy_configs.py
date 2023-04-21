@@ -6,28 +6,38 @@ class TaskConfig():
         self.language_prompts = {"wipe": ["Use the sponge to clean up the dirt.",
                                           "Use the eraser to clean up the dirt."],
                                     "sweep": ["Use the broom to brush the dirt into the dustpan"],
-                                    "scoop": ["Scoop up the block and lift it with the spatula"]}
+                                    "scoop": ["Scoop up the block and lift it with the spatula"],
+                                    "press": ["Press the red button"]}
 
 
         self.task_policy_configs = {
-            "wipe": {
-            "data_dir": "dataset/heuristics_0228",
-            "contact_folder": 'contact_front',
-            "txt_cmd": self.language_prompts["wipe"][0],
-            "tool_name": 'sponge',
-            'target_name':'diningTable',
-            "train_idx": np.concatenate([np.arange(0,45), np.arange(50,200)]),
-            "test_idx": np.arange(45, 50),
-        },
-            # "sweep": {
-            #     "data_dir": "dataset/sweep_to_dustpan",
-            #     "contact_folder": 'contact_front',
-            #     "txt_cmd": self.language_prompts["sweep"][0],
-            #     "tool_name": 'broom',
-            #     'target_name': 'diningTable',
-            #     "train_idx": np.arange(0, 45),
-            #     "test_idx": np.arange(45, 50),
-            # },
+        #     "wipe": {
+        #     "data_dir": "dataset/heuristics_0228",
+        #     "contact_folder": 'contact_front',
+        #     "txt_cmd": self.language_prompts["wipe"][0],
+        #     "tool_name": 'sponge',
+        #     'target_name':'diningTable',
+        #     "train_idx": np.concatenate([np.arange(0,45), np.arange(50,200)]),
+        #     "test_idx": np.arange(45, 50),
+        # },
+        #     "sweep": {
+        #         "data_dir": "dataset/sweep_to_dustpan_2",
+        #         "contact_folder": 'contact_front',
+        #         "txt_cmd": self.language_prompts["sweep"][0],
+        #         "tool_name": 'broom',
+        #         'target_name': 'diningTable',
+        #         "train_idx": np.arange(0, 45),
+        #         "test_idx": np.arange(45, 50),
+        #     },
+            "press": {
+                "data_dir": "dataset/press_",
+                "contact_folder": 'contact_front',
+                "txt_cmd": self.language_prompts["press"][0],
+                "tool_name": 'Panda_leftfinger_respondable',
+                'target_name': 'target_button_topPlate0',
+                "train_idx": np.arange(0, 95),
+                "test_idx": np.arange(95, 100),
+            },
             # "scoop": {"data_dir": "dataset/scoop_spatula_",
             #           "contact_folder": 'contact_front',
             #           "txt_cmd": self.language_prompts["scoop"][0],

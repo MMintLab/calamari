@@ -6,7 +6,7 @@ Huy ha's method preserve original image shape which is 256
 '''
 # TODO: support multiple pretrained model
 # os.environ["CUDA_VISIBLE_DEVICES"] = str(2)
-torch.cuda.set_device("cuda:1")
+torch.cuda.set_device("cuda:2")
 device = 'cuda'
 
 ## semantic version
@@ -64,7 +64,7 @@ def generate_heatmap(
         # ax.axis("off")
         # ax.imshow(img)
         # ax.set_title(label, fontsize=12)
-        label_grad -= label_grad.mean(axis=0)
+        label_grad -= label_grad.mean()
         grad = np.clip((label_grad - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
         # colored_grad = cmap(grad)
         # grad = 1 - grad
@@ -76,14 +76,16 @@ def generate_heatmap(
 
 if __name__ == '__main__':
     import os
-    keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt", "block"]
+    # keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt", "block"]
     # keywords = ["Use","the","broom","to","brush","dirt","into","dustpan"]
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
+    keywords = ["Press","the","red","button"]
 
-    
-    data_origrin = "dataset/heuristics_0228"
+       
+    # data_origrin = "dataset/heuristics_0228"
     # data_origrin = "dataset/scoop_spatula_"
-    # data_origrin = "dataset/sweep_to_dustpan"
+    # data_origrin = "dataset/sweep_to_dustpan_2"
+    data_origrin = "dataset/press_"
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
@@ -92,7 +94,7 @@ if __name__ == '__main__':
     dir_list = []
     for tf in trial_folder:
         data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy')
+        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_center')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 
