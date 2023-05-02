@@ -119,7 +119,7 @@ class TemporalTransformer(nn.Module):
         nn.init.uniform_(self.l2.bias, 0, 0.05)
 
 
-    def forward(self, x, padding_mask, type = 'stack'):
+    def forward(self, x, padding_mask, type = ''):
         x = self.l1(x)
         x *= np.sqrt(self.d_model) # L X B X ft
 

@@ -1,5 +1,5 @@
 import numpy as np
-import imageio
+# import imageio
 from typing import List
 
 import copy
@@ -10,10 +10,10 @@ import cv2
 import os
 import torch
 import torch.nn as nn
-from PIL import Image
+# from PIL import Image
 import numpy as np
 from torch.autograd import Variable
-import torchvision.transforms as transforms
+# import torchvision.transforms as transforms
 import tensorflow as tf
 import io
 

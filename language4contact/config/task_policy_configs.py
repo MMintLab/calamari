@@ -11,32 +11,36 @@ class TaskConfig():
 
 
         self.task_policy_configs = {
-        #     "wipe": {
-        #     "data_dir": "dataset/heuristics_0228",
-        #     "contact_folder": 'contact_front',
-        #     "txt_cmd": self.language_prompts["wipe"][0],
-        #     "tool_name": 'sponge',
-        #     'target_name':'diningTable',
-        #     "train_idx": np.concatenate([np.arange(0,45), np.arange(50,200)]),
-        #     "test_idx": np.arange(45, 50),
-        # },
-        #     "sweep": {
-        #         "data_dir": "dataset/sweep_to_dustpan_2",
-        #         "contact_folder": 'contact_front',
-        #         "txt_cmd": self.language_prompts["sweep"][0],
-        #         "tool_name": 'broom',
-        #         'target_name': 'diningTable',
-        #         "train_idx": np.arange(0, 45),
-        #         "test_idx": np.arange(45, 50),
-        #     },
+            "wipe": {
+            "data_dir": "dataset/heuristics_0228",
+            "contact_folder": 'contact_front',
+            "txt_cmd": self.language_prompts["wipe"][0],
+            "tool_name": 'sponge',
+            'target_name':'diningTable',
+            # "train_idx": np.arange(0,200),
+            "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
+            "test_idx": np.arange(45, 50),
+            "heatmap_folder": "heatmap_huy_center_/"
+        },
+            "sweep": {
+                "data_dir": "dataset/sweep_to_dustpan_2",
+                "contact_folder": 'contact_front',
+                "txt_cmd": self.language_prompts["sweep"][0],
+                "tool_name": 'broom',
+                'target_name': 'diningTable',
+                "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
+                "test_idx": np.arange(45, 50),
+                "heatmap_folder": "heatmap_huy_center_/"
+            },
             "press": {
                 "data_dir": "dataset/press_",
                 "contact_folder": 'contact_front',
                 "txt_cmd": self.language_prompts["press"][0],
-                "tool_name": 'Panda_leftfinger_respondable',
+                " tool_name": 'Panda_leftfinger_respondable',
                 'target_name': 'target_button_topPlate0',
-                "train_idx": np.arange(0, 95),
+                "train_idx": np.concatenate([np.arange(0,95), np.arange(95,105)]),
                 "test_idx": np.arange(95, 100),
+                "heatmap_folder": "heatmap_huy_center_/"
             },
             # "scoop": {"data_dir": "dataset/scoop_spatula_",
             #           "contact_folder": 'contact_front',

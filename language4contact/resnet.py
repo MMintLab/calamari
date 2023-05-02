@@ -38,8 +38,8 @@ class ResNet(nn.Module):
         self.layer1 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer2 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer3 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.fc = nn.Linear(512, dim_out) # TODO: parameterize
+        self.avgpool = nn.AvgPool2d(8, stride=1)
+        self.fc = nn.Linear(512, dim_out) 
         # self.fc = nn.Linear(16384, dim_out)
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -64,8 +64,11 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        # print("x shape", x.shape)
         x = self.avgpool(x)
+        # print("x shape", x.shape)
         x = x.view(x.size(0), -1)
+        # print("x shape", x.shape)
         x = self.fc(x)
 
         return x

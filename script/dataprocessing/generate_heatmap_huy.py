@@ -6,7 +6,7 @@ Huy ha's method preserve original image shape which is 256
 '''
 # TODO: support multiple pretrained model
 # os.environ["CUDA_VISIBLE_DEVICES"] = str(2)
-torch.cuda.set_device("cuda:2")
+torch.cuda.set_device("cuda:3")
 device = 'cuda'
 
 ## semantic version
@@ -59,12 +59,14 @@ def generate_heatmap(
     axes = axes.flatten()
     vmin = 0.000
     # cmap = plt.get_cmap("jet")
-    vmax = 0.020
+    vmax = 0.050
     for ax, label_grad, label in zip(axes, grads, labels):
         # ax.axis("off")
         # ax.imshow(img)
         # ax.set_title(label, fontsize=12)
+        print(label, label_grad.mean())
         label_grad -= label_grad.mean()
+
         grad = np.clip((label_grad - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
         # colored_grad = cmap(grad)
         # grad = 1 - grad
@@ -76,7 +78,7 @@ def generate_heatmap(
 
 if __name__ == '__main__':
     import os
-    # keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt", "block"]
+    # keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt"]
     # keywords = ["Use","the","broom","to","brush","dirt","into","dustpan"]
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
     keywords = ["Press","the","red","button"]
@@ -89,12 +91,12 @@ if __name__ == '__main__':
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
-    # trial_folder = trial_folder[200:]
+    trial_folder = trial_folder[98:]
 
     dir_list = []
     for tf in trial_folder:
         data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_center')
+        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_center_')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 

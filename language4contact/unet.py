@@ -86,22 +86,42 @@ class OutConv(nn.Module):
 class UNet_Decoder(nn.Module):
     def __init__(self, bilinear=False):
         super(UNet_Decoder, self).__init__()
+        # self.l1 = nn.Linear(2048, 2048)
+        # nn.init.kaiming_normal_(self.l1.weight, a=0.0, nonlinearity='relu', mode='fan_in')
+        # self.up1 = Up(2048, 1024, bilinear)
+        # self.up2 = Up(1024, 512, bilinear)
+        # self.up3 = Up(512, 256, bilinear)
+        # self.up4 = Up(256, 128, bilinear)
+        # self.up5 = Up(128, 64, bilinear)
+        # self.up6 = Up(64, 32, bilinear)
+        # self.up7 = Up(32, 16, bilinear)
+        # self.up8 = Up(16, 8, bilinear)
+        self.up1 = Up(512, 128, bilinear)
+        self.up2 = Up(128, 64, bilinear)
+        self.up3 = Up(64, 32, bilinear)
+        self.up4 = Up(32, 8, bilinear)
 
-        # self.up1 = Up(512, 256)
-        # self.up2 = Up(256, 128, bilinear)
-        self.up1 = Up(128, 64, bilinear)
-        self.up2 = Up(64, 32, bilinear)
-        self.up3 = Up(32, 16, bilinear)
-        self.up4 = Up(16, 8, bilinear)
-
+        # self.up1 = Up(32, 16, bilinear)
+        # self.up2 = Up(16, 8, bilinear)
+        # self.up3 = Up(8, 4, bilinear)
+        # self.up4 = Up(4, 2, bilinear)
+        # self.up5 = Up(2, 2, bilinear)
         self.outc = OutConv(8, 1)
-        self.tanh = nn.Tanh() 
+        self.sigmoid = nn.Sigmoid() 
 
     def forward(self, x):
-
+        # x = self.l1(x[:,:,0,0])
+        # x = x.reshape(x.shape[0],-1,8,8)
         x = self.up1(x)
         x = self.up2(x)
         x = self.up3(x)
         x = self.up4(x)
-        logits = self.tanh (self.outc(x))
+        # x = self.up5(x)
+        # x = self.up5(x)
+        # x = self.up6(x)
+        # x = self.up7(x)
+        # x = self.up8(x)
+        logits = self.sigmoid (self.outc(x))
+        # logits = self.outc(x)
+
         return logits

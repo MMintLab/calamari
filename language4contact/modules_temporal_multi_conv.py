@@ -24,7 +24,9 @@ class policy(nn.Module):
 
         ## Input processing for Transformer
         self.explainability = ClipExplainability(self.device)
-        self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(Config.dim_emb))
+
+        Config.dim_emb = 512 # TODO: For now
+        # self._image_encoder = image_encoder(self.device, dim_in = 1 , dim_out = int(Config.dim_emb))
 
         ## TODO: Put it temporally
         self.lang_dim_reducer = nn.Linear(Config.dim_emb, 32)
@@ -38,14 +40,12 @@ class policy(nn.Module):
         nn.init.uniform_(self.vis_dim_reducer.bias, 0, 0.05)
 
 
-
-
         ## Transformer Encoder
-        self.pos_enc = PositionalEncoding(self.dim_ft, dropout=0.1, max_len=30).to(self.device)
+        self.pos_enc = PositionalEncoding(Config.dim_emb, dropout=0.1, max_len=30).to(self.device)
 
 
         self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=2, dropout_rate=0.1, mha_dropout_rate=0.0,
-          dff=self.dim_ft, device= self.Config.device)
+          dff=Config.dim_emb, device= self.Config.device)
         self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float)
 
 
@@ -53,7 +53,7 @@ class policy(nn.Module):
         self.transformer_decoder = UNet_Decoder()
 
         # temporal transformer.
-        self.tp_transformer = TemporalTransformer(dim_in=self.dim_ft, d_model = self.dim_ft, sequence_length = self.L, device= self.device)
+        self.tp_transformer = TemporalTransformer(dim_in=Config.dim_emb, d_model = Config.dim_emb, sequence_length = self.L, device= self.device)
         # self.model_grd = [self._image_encoder, self.vl_transformer_encoder,  self.transformer_decoder, self.tp_transformer]
 
         self.text_embs = self._get_text_emb()
@@ -77,156 +77,34 @@ class policy(nn.Module):
         return patches
 
 
-    def read_heatmap_temporal(self, img_batch_pths, texts, tasks, flip):
-
-        words = sentence2words(texts)
-        if self.Config.heatmap_type == 'chefer':
-            cnt_dir = 'heatmap/'
-            for row_idx, row in enumerate(words):
-                row.insert(0, texts[row_idx])
-
-        elif self.Config.heatmap_type == 'huy':
-            cnt_dir = 'heatmap_huy_center/'
-        
-        # text = clip.tokenize(words).to(self.device)
-
-        ## image processing
-        txt_emb_batch = []
-        heatmaps_batch = []
-        img_batch = []
-        tp_masks = []
-        vl_masks = torch.ones((self.B, self.L, self.Config.max_sentence_l))
-        txt_emb_batch = torch.zeros((self.B, self.L, self.Config.max_sentence_l, 512)).to(self.device)
-        heatmaps_batch = torch.zeros((self.B, self.L, self.Config.max_sentence_l, self.Config.heatmap_size[0], self.Config.heatmap_size[1])).to(self.device)
-
-        # Batch
-        for b, img_pths in enumerate(img_batch_pths):
-            tp_mask = []
-            words_i = words[b]
-            task_i = tasks[b]
-            flip_i = flip[b]
-
-            # Read Texts as a token.
-            txt_emb_i = torch.zeros((self.Config.max_sentence_l, 512)).to(self.device)
-            txt_emb_i[:len(self.text_embs[task_i])] = self.text_embs[task_i]
-
-            txt_emb_batch[b] = txt_emb_i.unsqueeze(0).repeat((txt_emb_batch.shape[1], 1, 1)) 
-
-            # Image seq
-            for l, img_pth in enumerate(img_pths):
-                
-                if len(img_pth) > 0:
-                    heatmaps = []
-
-                    for i in range(self.Config.max_sentence_l):
-
-                        # Read word-wise heatmaps.
-                        if i < len(words_i):
-                            # Real VL-transformer Inputs.
-
-                            # i-th word.
-                            wd = words_i[i].replace('.', '')
-
-                            # Load word-wise heatmaps.
-                            hm_pth = img_pth.replace('rgb/', cnt_dir).split('.')[0]
-                            hm_pth = os.path.join(hm_pth, wd + '.png')
-                            heatmap = Image.open(hm_pth).resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
-                            heatmap = torch.tensor( np.array(heatmap)).to(self.device)
-
-                            if flip_i:
-                                heatmap = torch.flip(heatmap, (-1,))
-                            heatmaps.append(heatmap)
-
-                            # vl transformer mask = 0 : Real Input.
-                            vl_masks[b, -(l+1),i] = 0
-                        
-                        else:
-                            # Fake (Padding) VL-transformer Inputs.
-                            padding = torch.zeros_like(heatmaps[-1]).to(self.device)
-                            heatmaps.append(padding)
-                            vl_masks[b, -(l+1),i] = 1
-
-                    # Real Temporal-transformer Inputs.   
-                    # txt_emb_batch.insert(0, txt_emb_i)
-                    # txt_emb_batch[b,-(l+1),:] = txt_emb_i
-                    heatmaps_batch[b,-(l+1),:] = torch.stack(heatmaps)
-                    # heatmaps_batch.insert( 0,torch.stack(heatmaps))
-                    tp_mask.insert(0, 0)
-
-                elif len(img_pth) == 0: 
-                    # Fake (Padding) Temporal-transformer Inputs.
-                    # txt_emb_i = torch.zeros_like(txt_emb_batch[0,0,...]).to(self.device)
-                    # heatmaps = torch.zeros_like(heatmaps_batch[0,0,...]).to(self.device)
-                    # txt_emb_batch.insert(0,txt_emb_i)
-                    # heatmaps_batch.insert(0,heatmaps)
-                    tp_mask.insert(0,1)
-
-            tp_masks.append(tp_mask)
-
-        # Formatting.
-        # heatmap_batch_ = torch.stack(heatmaps_batch)
-        heatmap_batch_ = torch.flatten(heatmaps_batch, 0, 1)
-        vl_masks = torch.flatten(vl_masks, 0, 1).to(self.device) # Match heatmap size.
-        tp_masks = torch.tensor(tp_masks).to(self.device)
-        return txt_emb_batch, heatmap_batch_, vl_masks.bool(), tp_masks.bool()
-    
-    def input_processing(self, img, texts, tasks, mode = 'train', flip = None):
-        """
-        mode = 'train' : load heatmap
-        mode = 'test' : generate heatmap every time step
-        """
-        # txt_emb, heatmaps, padding_mask = self.explainability.get_heatmap_temporal(img, texts)
-        self.B = len(img)
-        if flip is None:
-            flip = torch.zeros((self.B))
-
-        txt_emb, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, flip) 
-
-        """
-        heatmaps : (B*l_temp) X l_lang x 225x225
-        """
-     
-        hm_emb = []
-
-        ## Get clip attention
-        heatmaps_ = heatmaps[ ~vl_mask[:,0]] # zero image to padding
-
-
-        img_enc_inp = torch.flatten(heatmaps_, 0, 1).unsqueeze(1).float()
-        out = self._image_encoder(img_enc_inp)
-
-        inp = torch.zeros((heatmaps.shape[0], heatmaps.shape[1], out.shape[-1])).to(self.Config.device)
-        inp[ ~vl_mask[:,0]] = out.reshape((heatmaps_.shape[0], heatmaps.shape[1], out.shape[-1]))
-
-
-        inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], inp.shape[-1])) # [batch size x seq x feat_dim]
-
-        return inp, txt_emb, vl_mask, tp_mask
-
 
     def forward_lava(self, visual_sentence, fused_x, vl_mask, tp_mask):
+        self.B = tp_mask.shape[0]
 
         visual_sentence = visual_sentence[ ~vl_mask[:,0]]
         fused_x = fused_x[ ~vl_mask[:,0]]
         vl_mask_ = vl_mask[ ~vl_mask[:,0]]
 
-        visual_sentence = self.vis_layer_norm(visual_sentence)
-        visual_sentence = self.vis_dim_reducer(visual_sentence)
+
+        # visual_sentence = self.vis_layer_norm(visual_sentence)
+        # visual_sentence = self.vis_dim_reducer(visual_sentence)
         
-        fused_x = self.lang_layer_norm(fused_x)
-        fused_x = self.lang_dim_reducer(fused_x)
+        # fused_x = self.lang_layer_norm(fused_x)
+        # fused_x = self.lang_dim_reducer(fused_x)
 
         # out = self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_) # L x (B * l_contact_seq) X ft
         # out = torch.mean(out, axis = 1) # TODO: remove?
-        
         out = torch.zeros((self.B * self.L, visual_sentence.shape[-1])).to(self.Config.device)
+
         out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_), axis = 1)
         out = out.reshape((self.B , self.L, visual_sentence.shape[-1]))
 
         tp_mask_tmp= tp_mask.unsqueeze(2).repeat((1, 1, out.shape[-1])) # 1 padding
         out = torch.where(tp_mask_tmp, torch.zeros_like(out).to(self.Config.device),  out)
 
-        tp_output = self.tp_transformer(out, padding_mask = tp_mask, type = 'stack')
+        # tp_output = self.tp_transformer(out, padding_mask = tp_mask, type = 'stack')
+        tp_output = self.tp_transformer(out, padding_mask = tp_mask)
+
         tp_output = tp_output.unsqueeze(2).unsqueeze(3)
 
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
@@ -276,8 +154,8 @@ class contact_mlp_decoder(nn.Module):
         x = self.relu(self.l2(x))
         x = self.relu(self.l3(x))
         # x = self.relu(self.l4(x))
-
-        x_cnt = self.sigmoid(self.l4(x))
+        x_cnt = self.l4(x)
+        # x_cnt = self.sigmoid(self.l4(x))
 
 
         return x_cnt
