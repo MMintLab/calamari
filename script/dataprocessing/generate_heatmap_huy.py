@@ -6,7 +6,7 @@ Huy ha's method preserve original image shape which is 256
 '''
 # TODO: support multiple pretrained model
 # os.environ["CUDA_VISIBLE_DEVICES"] = str(2)
-torch.cuda.set_device("cuda:3")
+torch.cuda.set_device("cuda:1")
 device = 'cuda'
 
 ## semantic version
@@ -79,19 +79,21 @@ def generate_heatmap(
 if __name__ == '__main__':
     import os
     # keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt"]
-    # keywords = ["Use","the","broom","to","brush","dirt","into","dustpan"]
+    keywords = ["sweep", "Use","the","broom","to","brush","dirt","into","dustpan"]
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
-    keywords = ["Press","the","red","button"]
+    keywords = ["Press","push", "the", "then", "red","orange", "purple", "teal", "azure", "violet", "black", "white", "maroon", "green", "rose", "blue", "navy", "yellow", "cyan", "silver", "gray", "olive", "magenta", "button"]
 
-       
+
+
     # data_origrin = "dataset/heuristics_0228"
     # data_origrin = "dataset/scoop_spatula_"
     # data_origrin = "dataset/sweep_to_dustpan_2"
-    data_origrin = "dataset/press_"
+    # data_origrin = "dataset/push"
+    data_origrin = "dataset/sweep"
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
-    trial_folder = trial_folder[98:]
+    # trial_folder = trial_folder[98:]
 
     dir_list = []
     for tf in trial_folder:

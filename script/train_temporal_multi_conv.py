@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from datetime import datetime
-
+import time
 from tqdm import tqdm
 import os
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -9,16 +9,17 @@ import os
 from language4contact.utils import *
 from language4contact.modules_temporal_multi_conv import  policy
 from language4contact.config.config_multi_conv import Config
-from language4contact.dataset_temporal_multi import DatasetTemporal as Dataset
-from language4contact.dataset_temporal_multi import augmentation
-
 from torch.utils.data import DataLoader
 from language4contact.modules_shared import *
+
+from language4contact.dataset_temporal_multi import DatasetTemporal as Dataset, augmentation
 
 
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
+parser.add_argument("--from_log", type=str, default='', help= "log to the previous path")
+
 
 args = parser.parse_args()
 # TXT  = "Use the sponge to clean up the dirt."
@@ -38,10 +39,7 @@ class ContactEnergy():
         self.Config = Config()
         torch.manual_seed(self.Config.seed)    
 
-        self.test_idx = test_idx
-        self.log_path = f'logs/{log_path}'
-        self._initlize_writer(self.log_path)
-        self._initialize_loss(mode = 'a')
+
 
         self.activation = {}
         ## Image Encoder
@@ -76,13 +74,22 @@ class ContactEnergy():
         self.optim = torch.optim.Adam(
                 [   {"params" : self.policy.parameters()}
                 ], lr=1e-3)
-        
 
-        # logdir = 'logs/multi/20230317-235231/policy.pth'
-        # pretrained = torch.load(logdir, map_location=torch.device('cpu'))
-        # print(pretrained.keys())
-        # self.policy.module.load_state_dict(pretrained["param"])
-        # self.optim.load_state_dict(pretrained["optim"])
+
+        self.start_epoch = 0
+        self.log_path = f'logs/{log_path}'
+
+        if len(args.from_log) > 0 :
+            pretrained = torch.load(os.path.join(args.from_log, "policy.pth"), map_location=torch.device('cpu'))
+            pretrained_optim = torch.load(os.path.join(args.from_log, "optim.pth"), map_location=torch.device('cpu'))
+
+            self.policy.module.load_state_dict(pretrained["param"])
+            self.start_epoch = pretrained["epoch"]
+            self.log_path  = pretrained["path"]
+            self.optim.load_state_dict(pretrained_optim["optim"])
+
+        self._initlize_writer(self.log_path)
+        self._initialize_loss(mode = 'a')
 
 
     
@@ -98,7 +105,7 @@ class ContactEnergy():
 
         tot_loss = 0
         # l_i_hist = []
-
+        t = time.time()
         for data in dataloader:
             l = data["idx"]
             rgb = list(zip(*data['traj_rgb_paths']))
@@ -107,6 +114,8 @@ class ContactEnergy():
             txt = list(data['txt'])
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
+            print("1:", time.time()-t)
+            t = time.time()
             # print(flip)
             # breakpoint()
 
@@ -122,7 +131,8 @@ class ContactEnergy():
 
             
             contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
-            # print(contact_seq)
+            print("2:",time.time()-t)
+            t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
             # loss
@@ -134,6 +144,10 @@ class ContactEnergy():
                 self.optim.zero_grad()
                 loss0_i.backward()
                 self.optim.step()
+
+            print("3:", time.time()-t)
+            t = time.time()
+
 
             if write:
                 rgb = zip(*data['traj_rgb_paths'])
@@ -152,6 +166,9 @@ class ContactEnergy():
                         contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir])
                         # l_i_hist.append(l_i)
                     # l_ir += 1
+            print("4:", time.time()-t)
+            t = time.time()
+
 
             # self.tot_loss['loss0'] = self.tot_loss['loss0']  + loss0_i.detach().cpu()
             tot_loss += loss0_i.detach().cpu()
@@ -162,12 +179,14 @@ class ContactEnergy():
         return contact_histories, contact_histories_ovl, tot_loss
 
 
-
     def get_energy_field(self):
-        for i in range (self.Config.epoch):
-            if i % 15 == 5 or i == self.Config.epoch - 1:
-                self.save_model(i)
-            
+        for i in range (self.start_epoch, self.Config.epoch):
+            t = time.time()
+            # if i % 15 == 0 or i == self.Config.epoch - 1:
+            #     self.save_model(i)
+            print("model saved:", time.time()-t)
+            t = time.time()
+
             self.policy.module.train(True)
             if i % 15 == 0 or i == self.Config.epoch -1: 
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, 
@@ -178,7 +197,7 @@ class ContactEnergy():
             else:
                 _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, 
                                                   N = np.amin([60, self.train_dataset.__len__()]))
-            
+            print("training loop:", time.time()-t)
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
             if i % 15 == 0 or i == self.Config.epoch -1: 
@@ -281,5 +300,5 @@ class ContactEnergy():
         return rgb
 
 
-CE = ContactEnergy( log_path = 'multi_conv_aug_three_100')
+CE = ContactEnergy( log_path = 'test')
 CE.get_energy_field()
