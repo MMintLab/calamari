@@ -13,32 +13,50 @@ import torchvision.transforms.functional as F
 import torchvision.transforms as T
 
 
-
 class DatasetTemporal(torch.utils.data.Dataset):
     def __init__(self, Config, mode = 'train', seq_l = -1, image_encoder = None):
         self.Config = Config
-        self.aug_num = self.Config.aug_num
         self.contact_seq_l = self.Config.contact_seq_l
         self.mode = mode 
         self.return_seq_l = seq_l
-        # self.txt_cmd = self.Config.txt_cmd
-        
+        self.cnt_w, self.cnt_h = 0, 0
+
 
         self.contact_folder = self.Config.contact_folder  #'contact_key_front'
         self.data_summary = self.get_data_summary()
-
-        # pretrained model.
         self.randomaffine = T.RandomAffine(degrees = 10, 
                                            translate = (0.15, 0.15), 
                                            scale = (0.9, 1.1), 
                                            shear = (5, 5))
+
+        # pretrained model.
+
         self._image_encoder = image_encoder 
         self.explainability = ClipExplainability(self.Config.device)
 
         # get language embeddings
+        # self.text_embs = self._get_text_emb()
+        self.idx_lst = [[0, -1, -1], [0, -1, 0], [0, -1, 1],
+                    [0, 0, -1], [0, 0, 0], [0, 0, 1],
+                    [0, 1, -1], [0, 1, 0], [0, 1, 1],
+                   [1, -1, -1], [1, -1, 0], [1, -1, 1],
+                    [1, 0, -1], [1, 0, 0], [1, 0, 1],
+                    [1, 1, -1], [1, 1, 0], [1, 1, 1]]
         self.preprocess_all()
         
 
+
+    def _get_text_emb(self):
+        txt_emb = {}
+        for task_n, task in self.Config.dataset_config.items():
+            texts = task["txt_cmd"]
+            words = sentence2words(texts)
+            words.insert(0, texts)
+            text = clip.tokenize(words).to(self.Config.device)
+            txt_emb_i = self.explainability.model.encode_text(text)
+            txt_emb[task_n] = txt_emb_i.detach()
+
+        return txt_emb
 
 
     def _get_idx_from_fn(self, fn):
@@ -76,11 +94,12 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
             for i in task[self.mode+"_idx"]:
                 
-                des = f'{task["data_dir"]}/episode{i}/description.txt'
-
-                with open(des) as f:
+                des_path = f'{task["data_dir"]}/episode{i}/description.txt'
+                with open(des_path) as f:
                     txt_cmd = f.readlines()[0]
 
+                # with open(des, 'rb') as f:
+                #     txt_cmd = pickle.load(f)
 
 
                 cnt_folder_path = f'{task["data_dir"]}/episode{i}/contact_front'
@@ -119,7 +138,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         return data_summary
 
 
-    def read_heatmap_temporal(self, img_pths, texts, task_i, aug_idx_i, heatmap_folder = None):
+    def read_heatmap_temporal(self, img_pths, texts, task_i, aug_param, heatmap_folder = None):
 
         words_i = sentence2words(texts)
         if self.Config.heatmap_type == 'chefer':
@@ -132,6 +151,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 cnt_dir = 'heatmap_huy_center_/'
             else: 
                 cnt_dir = heatmap_folder
+        # text = clip.tokenize(words).to(self.device)
 
         ## image processing
         txt_emb_batch = []
@@ -139,20 +159,26 @@ class DatasetTemporal(torch.utils.data.Dataset):
         img_batch = []
         tp_masks = []
         vl_masks = torch.ones((self.Config.contact_seq_l, self.Config.max_sentence_l))
+        # txt_emb_batch = torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, 512)).to(self.Config.device)
         heatmaps_batch = torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, self.Config.heatmap_size[0], self.Config.heatmap_size[1])).to(self.Config.device)
-        txt_batch =  torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, 512)).to(self.Config.device)
 
-
+        # Batch
+        # for b, img_pths in enumerate(img_batch_pths):
         tp_mask = []
+        #     words_i = words[b]
+        #     task_i = tasks[b]
+        #     flip_i = flip[b]
 
-
+        # Read Texts as a token.
+        txt_emb_i = torch.zeros((self.Config.max_sentence_l, 512)).to(self.Config.device)
+        txt_emb_i[:len(self.text_embs[task_i])] = self.text_embs[task_i]
+        txt_emb_batch = txt_emb_i.unsqueeze(0).repeat((self.Config.contact_seq_l, 1, 1)) 
 
         # Image seq
         for l, img_pth in enumerate(img_pths):
             
             if len(img_pth) > 0:
                 heatmaps = []
-                txts = []
 
                 for i in range(self.Config.max_sentence_l):
 
@@ -162,26 +188,26 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
                         # i-th word.
                         wd = words_i[i].replace('.', '')
-                        wd = wd.replace(',', '')
+                        wd = words_i[i].replace(',', '')
 
                         # Load word-wise heatmaps.
                         hm_pth = img_pth.replace('rgb/', cnt_dir).split('.')[0]
+                        
                         hm_pth = os.path.join(hm_pth, wd + '.png')
+                        hm_pth = hm_pth.replace('desk', 'dirt')
+                        print(hm_pth)
+
                         heatmap = Image.open(hm_pth)
                         # heatmap = Image.fromarray(augmentation(aug_idx_i, heatmap, rgb= False).numpy())
-                        
                         # heatmap = heatmap.resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
                         heatmap = torch.tensor( np.array(heatmap)).to(self.Config.device)
                         # print(heatmap.shape)
                         # breakpoint()
+
+                        if aug_param is not None:
+                            heatmap = F.affine(heatmap.unsqueeze(0), *aug_param, interpolation=self.randomaffine.interpolation, fill=self.randomaffine.fill)
                         # heatmap = augmentation(aug_idx_i, heatmap, rgb= False)
-                        heatmaps.append(heatmap)
-
-
-                        # read txt emb.
-                        with open(hm_pth.replace('png', 'npy'), 'rb') as f:
-                            txt_i = torch.tensor(np.load(f))
-                            txts.append( txt_i)
+                        heatmaps.append(heatmap.squeeze())
 
                         # vl transformer mask = 0 : Real Input.
                         vl_masks[-(l+1),i] = 0
@@ -190,13 +216,12 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         # Fake (Padding) VL-transformer Inputs.
                         padding = torch.zeros_like(heatmaps[-1]).to(self.Config.device)
                         heatmaps.append(padding)
-                        vl_masks[ -(l+1), :len(words_i)] = 1
+                        vl_masks[ -(l+1),i] = 1
 
                 # Real Temporal-transformer Inputs.   
                 # txt_emb_batch.insert(0, txt_emb_i)
                 # txt_emb_batch[b,-(l+1),:] = txt_emb_i
                 heatmaps_batch[-(l+1),:] = torch.stack(heatmaps)
-                txt_batch[-(l+1),:len(words_i)] = torch.cat(txts, dim=0)
                 # heatmaps_batch.insert( 0,torch.stack(heatmaps))
                 tp_mask.insert(0, 0)
 
@@ -211,42 +236,22 @@ class DatasetTemporal(torch.utils.data.Dataset):
         vl_masks = vl_masks.to(self.Config.device) # Match heatmap size.
         # vl_masks = torch.flatten(vl_masks, 0, 1).to(self.Config.device) # Match heatmap size.
         tp_masks = torch.tensor(tp_mask).to(self.Config.device)
-        return txt_batch, heatmaps_batch, vl_masks.bool(), tp_masks.bool()
+        return txt_emb_batch, heatmaps_batch, vl_masks.bool(), tp_masks.bool()
     
-
-
-    def heatmap_augmentation(self, heatmaps_batch, aug_param):
-
-
-        # Image seq
-        for l in range(heatmaps_batch.shape[0]): # per batch
-            heatmaps = []
-
-            heatmaps_batch[-(l+1),:] = F.affine( heatmaps_batch[-(l+1),:].unsqueeze(1), *aug_param, interpolation=self.randomaffine.interpolation, fill=self.randomaffine.fill).squeeze()
-            # heatmaps_batch[-(l+1),:] = torch.stack(heatmaps)
-
-        return heatmaps_batch
-    
-
-
-    
-    def input_processing(self, fused_x, heatmaps, vl_mask, tp_mask, aug_param):
+    def input_processing(self, img, texts, tasks, mode = 'train', aug_param = None, heatmap_folder = None):
         """
         mode = 'train' : load heatmap
         mode = 'test' : generate heatmap every time step
         """
         # txt_emb, heatmaps, padding_mask = self.explainability.get_heatmap_temporal(img, texts)
-        self.B = len(heatmaps)
-        # if aug_idx is None:
+        self.B = len(img)
+        # if aug_param is None:
         #     aug_idx = torch.zeros((self.B, 1))
 
-        # fused_x, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, heatmap_folder = heatmap_folder) 
+        fused_x, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, aug_param, heatmap_folder = heatmap_folder) 
         """
         heatmaps : (B*l_temp) X l_lang x 225x225
         """
-
-        if aug_param is not None:
-            heatmaps = self.heatmap_augmentation(heatmaps, aug_param)
         
         hm_emb = []
 
@@ -281,6 +286,17 @@ class DatasetTemporal(torch.utils.data.Dataset):
         return visual_sentence, fused_x, vl_mask, tp_mask
         # return inp, txt_emb, vl_mask, tp_mask
 
+
+    # def get_cnt_img_dim(self):
+    #     # Read random contact img.
+    #     folder_path1 = f'{self.data_dir}/t_{self.folder_idx[0]:03d}'
+    #     traj_cnt_path = os.path.join(folder_path1,self.contact_folder )
+    #     traj_cnt_fn = folder2filelist(traj_cnt_path)
+    #     traj_cnt_fn.sort()
+
+    #     # Get size.
+    #     w, h, _ = torch.tensor(cv2.imread(traj_cnt_fn[0])).shape
+    #     return w, h
     
     def preprocess_all(self):
         self.tot_dataset = {"visual_sentence": [],
@@ -295,14 +311,13 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         "txt": [], 
                         "task": [],
                         "heatmap_folder": [],
-                        "binary_contact": [],
-                        "heatmaps": []}
+                        "binary_contact": []}
         
         
         for idx_raw in trange( self.__len__()):
 
             if self.mode == 'train':   
-                idx = idx_raw // self.aug_num
+                idx = idx_raw // 18
             elif self.mode == 'test':
                 idx = idx_raw
 
@@ -317,19 +332,13 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
 
             traj_cnt_img = fn2img(traj_cnt_lst, d = 1)
-            # mask_ = get_traj_mask(traj_cnt_lst)
+            mask_ = get_traj_mask(traj_cnt_lst)
 
 
             self.cnt_w, self.cnt_h = traj_cnt_img[0].shape[-2:]
 
 
             binary_contact = 0 if torch.sum(traj_cnt_img[0]) == 0 else 1
-
-            fused_x, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(traj_rgb_lst, 
-                                                                    txt, 
-                                                                    task, 
-                                                                    heatmap_folder) 
-    
 
 
             self.tot_dataset["traj_rgb_paths"].append( traj_rgb_lst)
@@ -340,30 +349,19 @@ class DatasetTemporal(torch.utils.data.Dataset):
             self.tot_dataset["task"].append( task)
             self.tot_dataset["heatmap_folder"].append( heatmap_folder)
             self.tot_dataset["binary_contact"].append( binary_contact)
-            
-            self.tot_dataset["fused_x"].append( fused_x)
-            self.tot_dataset["heatmaps"].append( heatmaps)
-            self.tot_dataset["vl_mask"].append( vl_mask)
-            self.tot_dataset["tp_mask"].append( tp_mask)
 
 
 
     def __len__(self):
         if self.mode == 'train':
-            return len(self.data_summary) * self.aug_num
+            return len(self.data_summary) * 18
         
         elif self.mode == 'test':
             return len(self.data_summary)
+        
         # return len(self.data_summary['tot_rgb_flat'])
 
-
-    def __getitem__(self, idx_raw_):
-        if self.mode == 'train':
-            idx_raw = idx_raw_//  self.aug_num
-        else:
-            idx_raw = idx_raw_
-        
-
+    def __getitem__(self, idx_raw):
 
         traj_cnt_img = self.tot_dataset["traj_cnt_img"][idx_raw]
         w, h = traj_cnt_img[0].shape[-2:]
@@ -380,20 +378,19 @@ class DatasetTemporal(torch.utils.data.Dataset):
             traj_cnt_img = [traj_cnt_img[0]]
             aug_param = None
         
-        # fused_x, heatmaps, vl_mask, tp_mask, *aug_param
-        visual_sentence, fused_x, vl_mask, tp_mask =  self.input_processing(self.tot_dataset["fused_x"][idx_raw], 
-                                                                            self.tot_dataset["heatmaps"][idx_raw], 
-                                                                            self.tot_dataset["vl_mask"][idx_raw], 
-                                                                            self.tot_dataset["tp_mask"][idx_raw], 
-                                                                            aug_param)
+        visual_sentence, fused_x, vl_mask, tp_mask =  self.input_processing(self.tot_dataset["traj_rgb_paths"][idx_raw], 
+                                                                            self.tot_dataset["txt"][idx_raw], 
+                                                                            self.tot_dataset["task"][idx_raw], 
+                                                                            aug_param = aug_param, 
+                                                                            heatmap_folder = self.tot_dataset["heatmap_folder"][idx_raw] )
     
         aug_param = [-999] if aug_param is None else aug_param
 
-        # self.tot_dataset["visual_sentence"].append( visual_sentence.detach().cpu())
-        # self.tot_dataset["fused_x"].append( fused_x.detach().cpu())
-        # self.tot_dataset["vl_mask"].append( vl_mask.detach().cpu())
-        # self.tot_dataset["tp_mask"].append( tp_mask.detach().cpu())
-        # self.tot_dataset["aug_idx"].append( aug_param)
+        self.tot_dataset["visual_sentence"].append( visual_sentence.detach().cpu())
+        self.tot_dataset["fused_x"].append( fused_x.detach().cpu())
+        self.tot_dataset["vl_mask"].append( vl_mask.detach().cpu())
+        self.tot_dataset["tp_mask"].append( tp_mask.detach().cpu())
+        self.tot_dataset["aug_idx"].append( aug_param)
 
 
 
@@ -407,11 +404,62 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 "traj_cnt_paths": self.tot_dataset["traj_cnt_paths"][idx_raw]  , 
                 "traj_cnt_img": self.tot_dataset["traj_cnt_img"][idx_raw], 
                 # "mask_t": mask_t, 
-                "idx": idx_raw_, 
+                "idx": idx_raw, 
                 "txt": self.tot_dataset["txt"][idx_raw], 
                 "task": self.tot_dataset["task"][idx_raw],
                 "binary_contact": self.tot_dataset["binary_contact"][idx_raw]
                 }
+
+
+def augmentation( aug_idx, img, rgb = False):
+    if aug_idx[0,0] == 1:
+        if rgb:
+            img = torch.flip(img, (-2,))
+        else:
+            img = torch.flip(img, (-1,))
+
+    delta = 20 * abs(aug_idx[0,1]) #np.random.randint(20,40)
+    
+    if aug_idx[0,1] > 0:
+        img_ = torch.zeros_like(img)
+
+        if rgb:
+            img_[..., :img.shape[-2]-delta,:] = img[..., delta:,:]
+        else:
+            img_[..., :img.shape[-1]-delta] = img[..., delta:]
+        img = img_
+
+    elif aug_idx[0,1] < 0 :
+        img_ = torch.zeros_like(img)
+        if rgb:
+            img_[..., delta:,:] = img[..., :img.shape[-2]-delta,:]
+        else:
+            img_[..., delta:] = img[..., :img.shape[-1]-delta]
+        img = copy.copy(img_)
+
+
+    delta = 20 * abs(aug_idx[0,2]) #np.random.randint(20,40)
+    
+
+    ori_shape = img.shape
+    img = img.squeeze()
+    if aug_idx[0,2] > 0:
+        img_ = torch.zeros_like(img)
+        if rgb:
+            img_[..., :img.shape[-3]-delta, :,:] = img[..., delta:,:, :]
+        else:
+            img_[..., :img.shape[-2]-delta,:] = img[..., delta:,:]
+        img = img_
+
+    elif aug_idx[0,2] < 0 :
+        img_ = torch.zeros_like(img)
+        if rgb:
+            img_[ delta:, :, :] = img[ :img.shape[-3]-delta,:,:]
+        else:
+            img_[..., delta:, :] = img[..., :img.shape[-2]-delta, :]
+        img = img_
+    img = img.reshape(ori_shape)
+    return img
 
 
 

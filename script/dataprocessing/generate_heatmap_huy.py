@@ -42,58 +42,61 @@ def generate_heatmap(
     h, w, c = img.shape
     start = time()
 
-    # for _ in range(2):
-    grads = ClipWrapper.get_clip_saliency(
-        img=img,
-        text_labels=np.array(labels),
-        prompts=prompts,
-        **saliency_configs["ours"](h),
-    )[0]
-        # print(torch.sum(grads))
+    for label_i in labels:
+        grads, txt_emb = ClipWrapper.get_clip_saliency(
+            img=img,
+            text_labels=np.array([label_i]),
+            prompts=prompts,
+            **saliency_configs["ours"](h),
+        )
+            # print(torch.sum(grads))
+            
+        # return
+        print(f"get gradcam took {float(time() - start)} seconds", grads.shape)
         
-    # return
-    print(f"get gradcam took {float(time() - start)} seconds", grads.shape)
-    
-    grads = grads.cpu().numpy()
-    fig, axes = plt.subplots(3, 3)
-    axes = axes.flatten()
-    vmin = 0.000
-    # cmap = plt.get_cmap("jet")
-    vmax = 0.050
-    for ax, label_grad, label in zip(axes, grads, labels):
-        # ax.axis("off")
-        # ax.imshow(img)
-        # ax.set_title(label, fontsize=12)
-        print(label, label_grad.mean())
-        label_grad -= label_grad.mean()
-
-        grad = np.clip((label_grad - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
+        grads = grads.cpu().numpy()
+        vmin = 0.000
+        # cmap = plt.get_cmap("jet")
+        vmax = 0.050
+        # for ax, label_grad, label in zip(axes, grads, labels):
+            # ax.axis("off")
+            # ax.imshow(img)
+            # ax.set_title(label, fontsize=12)
+        # print(label_i, label_grad.mean())
+        grads -= grads.mean()
+        grad = np.clip((grads - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
         # colored_grad = cmap(grad)
         # grad = 1 - grad
         # colored_grad[..., -1] = grad * 0.7
         # ax.imshow(colored_grad)
         # I8 = (grad).astype(np.uint8)
-        img = Image.fromarray(np.uint8(grad*255))
-        img.save(os.path.join(save_folder_,f"{label}.png"))
+        gread_img = Image.fromarray(np.uint8(grad[0]*255))
+        gread_img.save(os.path.join(save_folder_,f"{label_i}.png"))
+
+        # save vector as pkl
+        np.save(os.path.join(save_folder_,f"{label_i}"), txt_emb.detach().cpu().numpy())
 
 if __name__ == '__main__':
     import os
-    # keywords = ["Use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt"]
-    keywords = ["sweep", "Use","the","broom","to","brush","dirt","into","dustpan"]
+    keywords = ["use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt"]
+
+    # keywords = ["sweep", "Use","the","broom","to","brush","dirt","into","dustpan"]
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
-    keywords = ["Press","push", "the", "then", "red","orange", "purple", "teal", "azure", "violet", "black", "white", "maroon", "green", "rose", "blue", "navy", "yellow", "cyan", "silver", "gray", "olive", "magenta", "button"]
+    # keywords = ["Press","push", "the", "then", "red","orange", "purple", "teal", "azure", "violet", "black", "white", "maroon", "green", "rose", "blue", "navy", "yellow", "cyan", "silver", "gray", "olive", "magenta", "button"]
+    # keywords = ["Press","push", "the", "then", "red", "maroon", "button"]
 
 
 
     # data_origrin = "dataset/heuristics_0228"
     # data_origrin = "dataset/scoop_spatula_"
     # data_origrin = "dataset/sweep_to_dustpan_2"
-    # data_origrin = "dataset/push"
-    data_origrin = "dataset/sweep"
+    # data_origrin = "dataset/push_0"
+    # data_origrin = "dataset/sweep"
+    data_origrin = "dataset/wipe"
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
-    # trial_folder = trial_folder[98:]
+    # trial_folder = trial_folder[105:]
 
     dir_list = []
     for tf in trial_folder:

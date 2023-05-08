@@ -14,7 +14,7 @@ import torch.nn as nn
 import numpy as np
 from torch.autograd import Variable
 # import torchvision.transforms as transforms
-import tensorflow as tf
+# import tensorflow as tf
 import io
 
 relu = torch.nn.ReLU()
@@ -316,21 +316,21 @@ def union_img(img_lst, thres = 0.5):
     return img_color
 
 
-def plot_to_image(figure):
-    """Converts the matplotlib plot specified by 'figure' to a PNG image and
-    returns it. The supplied figure is closed and inaccessible after this call."""
-    # Save the plot to a PNG in memory.
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    # Closing the figure prevents it from being displayed directly inside
-    # the notebook.
-    plt.close(figure)
-    buf.seek(0)
-    # Convert PNG buffer to TF image
-    image = tf.image.decode_png(buf.getvalue(), channels=4)
-    # Add the batch dimension
-    image = tf.expand_dims(image, 0)
-    return image
+# def plot_to_image(figure):
+#     """Converts the matplotlib plot specified by 'figure' to a PNG image and
+#     returns it. The supplied figure is closed and inaccessible after this call."""
+#     # Save the plot to a PNG in memory.
+#     buf = io.BytesIO()
+#     plt.savefig(buf, format='png')
+#     # Closing the figure prevents it from being displayed directly inside
+#     # the notebook.
+#     plt.close(figure)
+#     buf.seek(0)
+#     # Convert PNG buffer to TF image
+#     image = tf.image.decode_png(buf.getvalue(), channels=4)
+#     # Add the batch dimension
+#     image = tf.expand_dims(image, 0)
+#     return image
 
 def gen_plot(s_i):
     """Create a pyplot plot and save to buffer."""

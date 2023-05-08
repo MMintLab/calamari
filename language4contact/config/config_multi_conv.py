@@ -5,38 +5,26 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from .task_policy_configs import TaskConfig
+# from .task_policy_configs import TaskConfig
+from .task_policy_configs_v2 import TaskConfig
 
 class Config:
     def __init__(self):
 
-        self.motion = np.array([[[1, 0, 1], [0, 1, 0], [0, 0, 1]],
-                          [[1, 0, -1], [0, 1, 0], [0, 0, 1]],
-                          [[1, 0, 0], [0, 1, 1], [0, 0, 1]],
-                          [[1, 0, 0], [0, 1, -1], [0, 0, 1]],
-                          [[np.cos(np.pi / 4), -np.sin(np.pi / 4), 0], [np.sin(np.pi / 4), np.cos(np.pi / 4), 0],
-                           [0, 0, 1]],
-                          [[np.cos(np.pi / 4), np.sin(np.pi / 4), 0], [-np.sin(np.pi / 4), np.cos(np.pi / 4), 0],
-                           [0, 0, 1]]])
-
         # self.options = self.get_contact_options(self.W)
         self.W = 6 # window size
         self.N = 50 # counter example numbers
-        self.epoch = 1500
+        self.epoch = 5000
         self.gamma = 0.96
 
-        self.B = 1000
+        self.B = 800
         self.device = 'cuda'
         self.dim_emb = 512
         self.dim_ft = 32 # 32
         self.seed = 42
 
-        # self.train_idx = np.concatenate([np.arange(0,250), np.arange(500,1000)])
-        self.train_idx = np.arange(0,100)
-        self.test_idx = np.arange(290,300)
         self.train_s = 10
 
-        # self.n_idx = self.get_negative_idxs()
         self.g_mat = self.get_gamma_mat()
 
         ## Different Frames ##
@@ -57,10 +45,10 @@ class Config:
 
         self.heatmap_size = (256, 256) #224,224) # Resize the heatmap by this size
         self.heatmap_type = 'huy' # 'chefer'
-        self.data_dir = 'dataset/heuristics_coarser'
         self.contact_folder = 'contact_front'
         self.contact_seq_l = 4
-        # self.txt_cmd = "Use the sponge to clean up the dirt."
+        self.aug_num = 20
+
 
     def get_camera_proj(self, camera_config):
         R = np.array(camera_config["RT"])[:3,:3]
@@ -116,45 +104,6 @@ class Config:
         return imgs.detach().cpu().numpy()
 
 
-
-
-    # def _transform(self, coords, trans):
-    #     h, w = coords.shape[:2]
-    #     coords = np.reshape(coords, (h * w, -1))
-    #     coords = np.transpose(coords, (1, 0))
-    #     transformed_coords_vector = np.matmul(trans, coords)
-    #     transformed_coords_vector = np.transpose(
-    #         transformed_coords_vector, (1, 0))
-    #     return np.reshape(transformed_coords_vector,
-    #                       (h, w, -1))
-    # def _pixel_to_world_coords(self, pixel_coords, cam_proj_mat_inv):
-    #     h, w = pixel_coords.shape[:2]
-    #     pixel_coords = np.concatenate(
-    #         [pixel_coords, np.ones((h, w, 1))], -1)
-    #     world_coords = self._transform(pixel_coords, cam_proj_mat_inv)
-    #     world_coords_homo = np.concatenate(
-    #         [world_coords, np.ones((h, w, 1))], axis=-1)
-    #     return world_coords_homo
-    # def camera_to_world(self, img_cnt_pts):
-    #
-    #     cnt_pts_ = np.ones((3, img_cnt_pts.shape[0]))
-    #     cnt_pts_[:2, :] = img_cnt_pts.T
-    #
-    #
-    #     print(cnt_pts_.shape)
-    #     cam_proj_mat_homo = np.concatenate(
-    #         [self.camera_proj, [np.array([0, 0, 0, 1])]])
-    #     cam_proj_mat_inv = np.linalg.inv(cam_proj_mat_homo)[0:3]
-    #     world_coords_homo = np.expand_dims(self._pixel_to_world_coords(
-    #         pc, cam_proj_mat_inv), 0)
-    #
-    #     world_coords = world_coords_homo[..., :-1][0]
-    #
-    #     world_pts = np.linalg.pinv( self.camera_proj) @ cnt_pts_
-    #     world_pts = world_pts / np.mean(world_pts[3,:])
-    #     world_pts = world_pts.T
-    #     print("world pts", world_pts)
-    #     return world_pts[:,:3]
 
 
     def contact_frame_to_world(self, cnt_pxls):

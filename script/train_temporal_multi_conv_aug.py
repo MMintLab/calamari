@@ -1,19 +1,21 @@
 from argparse import ArgumentParser
 from datetime import datetime
 import time
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import os
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2, 3"
-
 from language4contact.utils import *
 from language4contact.modules_temporal_multi_conv import  policy
 from language4contact.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
 from language4contact.modules_shared import *
 
-from language4contact.dataset_temporal_multi import DatasetTemporal as Dataset, augmentation
-
+from language4contact.dataset_temporal_multi_v2 import DatasetTemporal as Dataset
+# fro]\cs.classification import JaccardIndex
+import tensorflow as tf
+import torchvision.transforms.functional as F
+from language4contact.loss import w_binary_contact
 
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
@@ -91,6 +93,11 @@ class ContactEnergy():
         self._initlize_writer(self.log_path)
         self._initialize_loss(mode = 'a')
 
+        self.CEL = nn.BCELoss()
+        # self.BA = BinaryAccuracy()
+        # self.IOU =  JaccardIndex(task="binary", num_classes=1).to(self.Config.device)
+        # print(self.IOU.is_differentiable)
+        # breakpoint()
 
     
     def get_activation(self, name):
@@ -99,7 +106,7 @@ class ContactEnergy():
         return hook
 
 
-    def feedforward(self, dataloader, write = False, N = 200, mode = 'train'):
+    def feedforward(self, dataloader, write = False, N = 200, mode = 'test'):
         contact_histories = [0 for _ in range(N)] #self.train_dataLoader.__len__()
         contact_histories_ovl = [0 for _ in range(N)]  #self.train_dataLoader.__len__()
 
@@ -114,7 +121,8 @@ class ContactEnergy():
             txt = list(data['txt'])
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
-            print("1:", time.time()-t)
+
+            # print("1:", time.time()-t)
             t = time.time()
             # print(flip)
             # breakpoint()
@@ -131,21 +139,32 @@ class ContactEnergy():
 
             
             contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
-            print("2:",time.time()-t)
             t = time.time()
-            # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
-            # loss
-            loss0_i = torch.norm( traj_cnt_img.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
-            # print(loss0_i,  torch.norm(traj_cnt_img.to(self.Config.device)), torch.norm(contact_seq.to(self.Config.device)))
-            loss0_i = 1e5 * loss0_i
+
+            # loss0_i = w_binary_contact( )
+            loss0_i = self.CEL(  
+                               torch.flatten(contact_seq, -2, -1),
+                               torch.flatten(traj_cnt_img, -2, -1).to(self.Config.device)) * 1e4
+
+
+            # loss0_i = self.CEL(  torch.flatten(contact_seq, -2, -1), torch.flatten(traj_cnt_img, -2, -1).to(self.Config.device))
+
+            # loss0_i = self.BA( torch.flatten(traj_cnt_img, -2, -1).unsqueeze(2).to(self.Config.device), 
+            #                    torch.flatten(contact_seq, -2, -1).unsqueeze(2))
+            
+            # loss0_i = self.IOU( contact_seq, traj_cnt_img.to(self.Config.device))
+            # print(loss0_i)
+            # loss0_i = traj_cnt_img.to(self.Config.device) - contact_seq
+            # loss0_i = 1e5 * torch.sum(torch.abs(loss0_i))
+            # loss0_i = torch.norm( contact_seq - traj_cnt_img.to(self.Config.device))
             
             if mode == 'train':
                 self.optim.zero_grad()
                 loss0_i.backward()
                 self.optim.step()
 
-            print("3:", time.time()-t)
+            # print("3:", time.time()-t)
             t = time.time()
 
 
@@ -163,10 +182,21 @@ class ContactEnergy():
                         # contact_seq_round = round_mask(traj_cnt_img[l_ir])
                         contact_seq_round = round_mask(contact_seq[l_ir].detach().cpu())
                         contact_histories[l_i] = contact_seq_round
-                        contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir])
+
+                        # print(aug_idx)
+                        # breakpoint()
+                        if aug_idx[0][0] != -999 :
+                            contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, 
+                                                                            float(aug_idx[0][l_ir].numpy()), 
+                                                                            (int(aug_idx[1][0][l_ir].numpy()), int(aug_idx[1][1][l_ir].numpy())) , 
+                                                                            float(aug_idx[2][l_ir].numpy()), 
+                                                                            (float(aug_idx[3][0][l_ir].numpy()), float(aug_idx[3][1][l_ir].numpy())) )
+                        else: 
+                            contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, None)
+
                         # l_i_hist.append(l_i)
                     # l_ir += 1
-            print("4:", time.time()-t)
+            # print("4:", time.time()-t)
             t = time.time()
 
 
@@ -180,24 +210,24 @@ class ContactEnergy():
 
 
     def get_energy_field(self):
-        for i in range (self.start_epoch, self.Config.epoch):
+        for i in trange (self.start_epoch, self.Config.epoch):
             t = time.time()
-            # if i % 15 == 0 or i == self.Config.epoch - 1:
-            #     self.save_model(i)
-            print("model saved:", time.time()-t)
+            if i % 15 == 0 or i == self.Config.epoch - 1:
+                self.save_model(i)
+
             t = time.time()
 
             self.policy.module.train(True)
-            if i % 15 == 0 or i == self.Config.epoch -1: 
+            if (i % 15 == 0 or i == self.Config.epoch -1) and (i != 0): 
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, 
                                                                                       write = True,
                                                                                         N = np.amin([60, self.train_dataset.__len__()]),
                                                                                         mode = 'train')
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
-                _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, 
+                _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, mode = 'train',
                                                   N = np.amin([60, self.train_dataset.__len__()]))
-            print("training loop:", time.time()-t)
+            # print("training loop:", time.time()-t)
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
             if i % 15 == 0 or i == self.Config.epoch -1: 
@@ -243,8 +273,8 @@ class ContactEnergy():
         # get the file directory.
         filename = os.path.realpath(__file__).split('/')[-1]
         save_script(f'script/{filename}', logdir)
-        save_script('language4contact/config/config_multi.py', logdir)
-        save_script('language4contact/config/task_policy_configs.py', logdir)
+        save_script('language4contact/config/config_multi_conv.py', logdir)
+        save_script('language4contact/config/task_policy_configs_v2.py', logdir)
         save_script('language4contact/modules_temporal_multi.py', logdir)
         save_script('language4contact/modules_temporal.py', logdir)
         save_script('language4contact/temporal_transformer.py', logdir)
@@ -280,25 +310,29 @@ class ContactEnergy():
         else:
             raise Exception("Error : mode not recognized")
 
-    def  overlay_cnt_rgb(self, rgb_path, cnt_pred, aug_idx):
+    def  overlay_cnt_rgb(self, rgb_path, cnt_pred, *aug_param):
         ## open rgb image with cv2
         rgb = cv2.imread(rgb_path)
         rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)[:,:,:3]
         rgb = torch.tensor(rgb)
+
+        if len(aug_param) > 1:
+            rgb = F.affine(rgb.permute((2,0,1)), *aug_param).permute((1,2,0))
         
-        rgb = augmentation( aug_idx, rgb, rgb = True)
+        # rgb = rgb.squeeze() #* 255
+        # print(aug_param, torch.amax(rgb), torch.amin(rgb), torch.sum(rgb))
+        # rgb = augmentation( aug_idx, rgb, rgb = True)
         # torch.flip(rgb, (-2,))
 
-        # print(rgb, cnt_pred)
         cnt_pred = torch.tensor(cnt_pred) * 255
         cnt_pred = cnt_pred.to(torch.uint8)
         iidx, jidx = torch.where( cnt_pred != 0)
-        rgb[iidx, jidx,0] = cnt_pred[iidx, jidx] #* 255.
-        rgb[iidx, jidx,1] = cnt_pred[iidx, jidx] #* 255.
-        rgb[iidx, jidx,2] = cnt_pred[iidx, jidx] #* 255.
+        rgb[iidx, jidx,0] = cnt_pred[iidx, jidx]
+        rgb[iidx, jidx,1] = cnt_pred[iidx, jidx]
+        rgb[iidx, jidx,2] = cnt_pred[iidx, jidx] 
 
         return rgb
 
 
-CE = ContactEnergy( log_path = 'test')
+CE = ContactEnergy( log_path = 'FINAL_push0_10_bce_affine_every_itr')
 CE.get_energy_field()
