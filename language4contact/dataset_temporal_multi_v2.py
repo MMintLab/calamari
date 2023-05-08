@@ -99,7 +99,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
                     # t-3, t-2, t-1, t RGB
                     if local_idx < self.contact_seq_l:
                         traj_rgb_lst = ['','','','']
-                        traj_rgb_lst[:local_idx+1] = traj_rgb_fn[:local_idx+1]
+                        traj_rgb_lst[ - (local_idx+1):] = traj_rgb_fn[:local_idx+1]
                         traj_cnt_lst = [traj_cnt_fn[local_idx]]
                     else:
                         traj_rgb_lst = traj_rgb_fn[local_idx-3:local_idx+1]
@@ -143,7 +143,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         txt_batch =  torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, 512)).to(self.Config.device)
 
 
-        tp_mask = []
+        tp_mask = torch.zeros(self.Config.contact_seq_l)
 
 
 
@@ -195,15 +195,16 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 # Real Temporal-transformer Inputs.   
                 # txt_emb_batch.insert(0, txt_emb_i)
                 # txt_emb_batch[b,-(l+1),:] = txt_emb_i
-                heatmaps_batch[-(l+1),:] = torch.stack(heatmaps)
-                txt_batch[-(l+1),:len(words_i)] = torch.cat(txts, dim=0)
+                heatmaps_batch[l,:] = torch.stack(heatmaps)
+                txt_batch[l, :len(words_i)] = torch.cat(txts, dim=0)
                 # heatmaps_batch.insert( 0,torch.stack(heatmaps))
-                tp_mask.insert(0, 0)
+                tp_mask[l] = 0
 
             elif len(img_pth) == 0: 
-                tp_mask.insert(0,1)
+                 tp_mask[l] = 1
 
-
+        print(tp_mask, torch.sum(heatmaps_batch, dim = (2,3)))
+        breakpoint()
         # Formatting.
         # heatmap_batch_ = torch.stack(heatmaps_batch)
         # heatmaps_batch = torch.flatten(heatmaps_batch, 0, 1)
@@ -314,7 +315,6 @@ class DatasetTemporal(torch.utils.data.Dataset):
             heatmap_folder = self.data_summary[idx]["heatmap_folder"]
             txt = self.data_summary[idx]["txt"]
             task = self.data_summary[idx]["task"]
-
 
             traj_cnt_img = fn2img(traj_cnt_lst, d = 1)
             # mask_ = get_traj_mask(traj_cnt_lst)
