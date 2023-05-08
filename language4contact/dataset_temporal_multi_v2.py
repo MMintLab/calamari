@@ -139,11 +139,12 @@ class DatasetTemporal(torch.utils.data.Dataset):
         img_batch = []
         tp_masks = []
         vl_masks = torch.ones((self.Config.contact_seq_l, self.Config.max_sentence_l))
+        tp_mask = torch.ones(self.Config.contact_seq_l)
         heatmaps_batch = torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, self.Config.heatmap_size[0], self.Config.heatmap_size[1])).to(self.Config.device)
         txt_batch =  torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, 512)).to(self.Config.device)
 
 
-        tp_mask = torch.zeros(self.Config.contact_seq_l)
+        
 
 
 
@@ -184,13 +185,13 @@ class DatasetTemporal(torch.utils.data.Dataset):
                             txts.append( txt_i)
 
                         # vl transformer mask = 0 : Real Input.
-                        vl_masks[-(l+1),i] = 0
+                        vl_masks[l, i] = 0
                     
                     else:
                         # Fake (Padding) VL-transformer Inputs.
                         padding = torch.zeros_like(heatmaps[-1]).to(self.Config.device)
                         heatmaps.append(padding)
-                        vl_masks[ -(l+1), :len(words_i)] = 1
+                        vl_masks[l, len(words_i):] = 1
 
                 # Real Temporal-transformer Inputs.   
                 # txt_emb_batch.insert(0, txt_emb_i)
@@ -203,7 +204,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
             elif len(img_pth) == 0: 
                  tp_mask[l] = 1
 
-        print(tp_mask, torch.sum(heatmaps_batch, dim = (2,3)))
+        print(vl_masks, tp_mask, torch.sum(heatmaps_batch, dim = (2,3)), torch.sum(txt_batch, dim = -1))
         breakpoint()
         # Formatting.
         # heatmap_batch_ = torch.stack(heatmaps_batch)
