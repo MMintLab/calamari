@@ -204,8 +204,8 @@ class DatasetTemporal(torch.utils.data.Dataset):
             elif len(img_pth) == 0: 
                  tp_mask[l] = 1
 
-        print(vl_masks, tp_mask, torch.sum(heatmaps_batch, dim = (2,3)), torch.sum(txt_batch, dim = -1))
-        breakpoint()
+        # print(vl_masks, tp_mask, torch.sum(heatmaps_batch, dim = (2,3)), torch.sum(txt_batch, dim = -1))
+        # breakpoint()
         # Formatting.
         # heatmap_batch_ = torch.stack(heatmaps_batch)
         # heatmaps_batch = torch.flatten(heatmaps_batch, 0, 1)
@@ -406,7 +406,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 "aug_idx": aug_param,
                 "traj_rgb_paths": self.tot_dataset["traj_rgb_paths"][idx_raw]  , 
                 "traj_cnt_paths": self.tot_dataset["traj_cnt_paths"][idx_raw]  , 
-                "traj_cnt_img": self.tot_dataset["traj_cnt_img"][idx_raw], 
+                "traj_cnt_img": traj_cnt_img, 
                 # "mask_t": mask_t, 
                 "idx": idx_raw_, 
                 "txt": self.tot_dataset["txt"][idx_raw], 
