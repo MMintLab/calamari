@@ -12,8 +12,8 @@ from language4contact.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
 from language4contact.modules_shared import *
 
-from language4contact.dataset_temporal_multi import DatasetTemporal as Dataset, augmentation
-
+from language4contact.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
+import tensorflow as tf
 
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
@@ -99,7 +99,7 @@ class ContactEnergy():
         return hook
 
 
-    def feedforward(self, dataloader, write = False, N = 200, mode = 'train'):
+    def feedforward(self, dataloader, write = False, N = 200, mode = 'test'):
         contact_histories = [0 for _ in range(N)] #self.train_dataLoader.__len__()
         contact_histories_ovl = [0 for _ in range(N)]  #self.train_dataLoader.__len__()
 
@@ -114,8 +114,8 @@ class ContactEnergy():
             txt = list(data['txt'])
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
-            print("1:", time.time()-t)
-            t = time.time()
+            # print("1:", time.time()-t)
+            # t = time.time()
             # print(flip)
             # breakpoint()
 
@@ -131,7 +131,7 @@ class ContactEnergy():
 
             
             contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
-            print("2:",time.time()-t)
+            # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
@@ -145,8 +145,8 @@ class ContactEnergy():
                 loss0_i.backward()
                 self.optim.step()
 
-            print("3:", time.time()-t)
-            t = time.time()
+            # print("3:", time.time()-t)
+            # t = time.time()
 
 
             if write:
@@ -166,8 +166,8 @@ class ContactEnergy():
                         contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir])
                         # l_i_hist.append(l_i)
                     # l_ir += 1
-            print("4:", time.time()-t)
-            t = time.time()
+            # print("4:", time.time()-t)
+            # t = time.time()
 
 
             # self.tot_loss['loss0'] = self.tot_loss['loss0']  + loss0_i.detach().cpu()
@@ -180,11 +180,11 @@ class ContactEnergy():
 
 
     def get_energy_field(self):
-        for i in range (self.start_epoch, self.Config.epoch):
+        for i in tqdm(range (self.start_epoch, self.Config.epoch)):
             t = time.time()
-            # if i % 15 == 0 or i == self.Config.epoch - 1:
-            #     self.save_model(i)
-            print("model saved:", time.time()-t)
+            if i % 15 == 0 or i == self.Config.epoch - 1:
+                self.save_model(i)
+            # print("model saved:", time.time()-t)
             t = time.time()
 
             self.policy.module.train(True)
@@ -196,8 +196,8 @@ class ContactEnergy():
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
                 _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, 
-                                                  N = np.amin([60, self.train_dataset.__len__()]))
-            print("training loop:", time.time()-t)
+                                                  N = np.amin([60, self.train_dataset.__len__()]), mode = 'train')
+            # print("training loop:", time.time()-t)
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
             if i % 15 == 0 or i == self.Config.epoch -1: 
@@ -300,5 +300,5 @@ class ContactEnergy():
         return rgb
 
 
-CE = ContactEnergy( log_path = 'test')
+CE = ContactEnergy( log_path = 'multi_conv_aug_wipe_rep')
 CE.get_energy_field()

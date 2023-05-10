@@ -7,7 +7,7 @@ class TaskConfig():
                                           "Use the eraser to clean up the dirt."],
                                     "sweep": ["Use the broom to brush the dirt into the dustpan"],
                                     "scoop": ["Scoop up the block and lift it with the spatula"],
-                                    "press": ["Press the red button"]}
+                                    "press": ["Press the maroon button"]}
 
 
         self.task_policy_configs = {
@@ -40,7 +40,7 @@ class TaskConfig():
                 "txt_cmd": self.language_prompts["press"][0],
                 " tool_name": 'Panda_leftfinger_respondable',
                 'target_name': 'target_button_topPlate0',
-                "train_idx": np.arange(0, 10),
+                "train_idx": np.arange(0, 100),
                 # "train_idx": np.concatenate([np.arange(0,95), np.arange(95,105)]),
                 "test_idx": np.arange(100, 110),
                 "heatmap_folder": "heatmap_huy_center_/"

@@ -14,10 +14,10 @@ class Config:
         # self.options = self.get_contact_options(self.W)
         self.W = 6 # window size
         self.N = 50 # counter example numbers
-        self.epoch = 5000
+        self.epoch = 2000
         self.gamma = 0.96
 
-        self.B = 800
+        self.B = 300
         self.device = 'cuda'
         self.dim_emb = 512
         self.dim_ft = 32 # 32

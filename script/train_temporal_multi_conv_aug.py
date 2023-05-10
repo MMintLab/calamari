@@ -12,6 +12,8 @@ from torch.utils.data import DataLoader
 from language4contact.modules_shared import *
 
 from language4contact.dataset_temporal_multi_v2 import DatasetTemporal as Dataset
+from language4contact.dataset_temporal_multi_v2 import post_process
+
 # fro]\cs.classification import JaccardIndex
 import tensorflow as tf
 import torchvision.transforms.functional as F
@@ -49,13 +51,12 @@ class ContactEnergy():
         self.image_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
         self.image_encoder.to(self.Config.device).eval()
         self.image_encoder.avgpool.register_forward_hook(self.get_activation('avgpool'))
+        self.image_encoder_dict = {"model": self.image_encoder, "activation": self.activation}
 
 
         ## Data-loader
-        self.train_dataset = Dataset(self.Config, mode = "train", image_encoder = {"model": self.image_encoder,
-                                                                                   "activation": self.activation})
-        self.test_dataset = Dataset(self.Config, mode = "test", image_encoder = {"model": self.image_encoder,
-                                                                                   "activation": self.activation})
+        self.train_dataset = Dataset(self.Config, mode = "train", image_encoder = self.image_encoder_dict )
+        self.test_dataset = Dataset(self.Config, mode = "test", image_encoder = self.image_encoder_dict)
         self.train_dataLoader = DataLoader(dataset= self.train_dataset,
                          batch_size=self.Config.B, shuffle=True, drop_last=False)
 
@@ -122,30 +123,33 @@ class ContactEnergy():
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
 
-            # print("1:", time.time()-t)
-            t = time.time()
-            # print(flip)
-            # breakpoint()
-
 
             # inp, txt_emb, vl_mask, tp_mask
-            visual_sentence = data["visual_sentence"].flatten(0,1)
+            # visual_sentence = data["visual_sentence"].flatten(0,1)
             fused_x = data["fused_x"].flatten(0,1)
             vl_mask = data["vl_mask"].flatten(0,1)
             tp_mask = data["tp_mask"]
+
+
+            visual_sentence, vl_mask = post_process(self.image_encoder_dict, data["img_enc_inp"].flatten(0,1),  vl_mask, self.Config)
+            # t = time.time()
+
+            # visual_sentence, vl_mask = post_process(data["img_enc_inp"].flatten(0,1),  vl_mask)
+
             # visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks, flip = flip)
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
 
-            
+            # print(torch.sum(fused_x, dim = -1), vl_mask.shape,  torch.sum(vl_mask, dim = -1), tp_mask)
+            # print(torch.sum(visual_sentence, dim = -1) )
+            # breakpoint()
             contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
-            t = time.time()
-
+            # print("3:", time.time()-t)
+            # t = time.time()
 
             # loss0_i = w_binary_contact( )
-            loss0_i = self.CEL(  
-                               torch.flatten(contact_seq, -2, -1),
-                               torch.flatten(traj_cnt_img, -2, -1).to(self.Config.device)) * 1e4
+            loss0_i = self.CEL( torch.flatten(contact_seq, -2, -1),
+                               torch.flatten(traj_cnt_img, -2, -1).float()) * 1e4
 
 
             # loss0_i = self.CEL(  torch.flatten(contact_seq, -2, -1), torch.flatten(traj_cnt_img, -2, -1).to(self.Config.device))
@@ -164,6 +168,10 @@ class ContactEnergy():
                 loss0_i.backward()
                 self.optim.step()
 
+                # print("4:", time.time()-t)
+                t = time.time()
+
+
             # print("3:", time.time()-t)
             t = time.time()
 
@@ -180,11 +188,12 @@ class ContactEnergy():
                     if l_i < N: 
                         # print(l_i, rgb_i_)
                         # contact_seq_round = round_mask(traj_cnt_img[l_ir])
-                        contact_seq_round = round_mask(contact_seq[l_ir].detach().cpu())
-                        contact_histories[l_i] = contact_seq_round
+                        # contact_seq_round = round_mask(contact_seq[l_ir].detach().cpu())
+                        contact_histories[l_i] = contact_seq[l_ir].detach().cpu()
 
                         # print(aug_idx)
                         # breakpoint()
+                        contact_seq_round = round_mask(contact_histories[l_i], thres = 0.2)
                         if aug_idx[0][0] != -999 :
                             contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, 
                                                                             float(aug_idx[0][l_ir].numpy()), 
@@ -196,7 +205,7 @@ class ContactEnergy():
 
                         # l_i_hist.append(l_i)
                     # l_ir += 1
-            # print("4:", time.time()-t)
+            # print("5:", time.time()-t)
             t = time.time()
 
 
@@ -211,10 +220,12 @@ class ContactEnergy():
 
     def get_energy_field(self):
         for i in trange (self.start_epoch, self.Config.epoch):
+
             t = time.time()
             if i % 15 == 0 or i == self.Config.epoch - 1:
                 self.save_model(i)
 
+            print("save model", time.time() - t)
             t = time.time()
 
             self.policy.module.train(True)
@@ -227,6 +238,9 @@ class ContactEnergy():
             else:
                 _, _, tot_loss = self.feedforward(self.train_dataLoader, write = False, mode = 'train',
                                                   N = np.amin([60, self.train_dataset.__len__()]))
+                
+
+            print("1 iter", time.time() - t)
             # print("training loop:", time.time()-t)
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
@@ -334,5 +348,5 @@ class ContactEnergy():
         return rgb
 
 
-CE = ContactEnergy( log_path = 'FINAL_push0_10_bce_affine_every_itr')
+CE = ContactEnergy( log_path = 'FINAL_push0_100_bce_affine_every_itr_sent')
 CE.get_energy_field()

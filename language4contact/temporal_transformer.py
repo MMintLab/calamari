@@ -57,6 +57,7 @@ class PrenormPixelLangEncoder(nn.Module):
             pixel_x_ = self.LayerNorm1(pixel_x).permute((1,0,2))
             lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype)).permute((1,0,2))
 
+            # print(torch.sum(padding_mask, dim= -1), torch.sum(lang_x, dim = -1), torch.sum(pixel_x, dim = -1))
             x2, _ = self.multiheadattention(query = lang_x_, 
                                          key = pixel_x_, 
                                          value = pixel_x_,

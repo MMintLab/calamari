@@ -164,6 +164,7 @@ def trajectory_score(energy, seq, idx = None, gamma = 0.8, device = 'cpu'):
 
 def read_mask(fn, d):
     if d == 1:
+        # return torch.tensor(cv2.imread(fn), dtype= torch.uint8)[:,:,0]
         return torch.tensor(cv2.imread(fn))[:,:,0] / 255.0
     if d == 3:
         bgr = cv2.imread(fn)
