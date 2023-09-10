@@ -1,5 +1,6 @@
 from language4contact.semantic_abstraction.generate_relevancy import *
 from PIL import Image
+import cv2
 '''
 Huy ha's method preserve original image shape which is 256
 
@@ -30,13 +31,17 @@ def generate_heatmap(
     """
     :param  img np.nparray (0~255.)
     """
+    print(file_path)
     img = np.array(imageio.imread(file_path))
+    # img = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
+
+
     save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])
     if not os.path.exists(save_folder_):
         os.mkdir(save_folder_) 
     else:
         print(save_folder_, "exists")
-        return
+        # return
 
     assert img.dtype == np.uint8
     h, w, c = img.shape
@@ -81,9 +86,9 @@ if __name__ == '__main__':
     import os
     # keywords = ["use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt"]
 
-    keywords = ["sweep", "Use","the","broom","to","brush","dirt","into","dustpan"]
-    keywords = ["draw", "C","the","letter"]
-
+    # keywords = ["sweep", "Use","the","broom","to","brush","dirt","into","dustpan"]
+    # keywords = ["draw", "C","the","letter"]
+    keywords = ["bowl"]
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
     # keywords = ["Press","push", "the", "then", "red","orange", "purple", "teal", "azure", "violet", "black", "white", "maroon", "green", "rose", "blue", "navy", "yellow", "cyan", "silver", "gray", "olive", "magenta", "button"]
     # keywords = ["Press","push", "the", "then", "red", "maroon", "button"]
@@ -95,8 +100,7 @@ if __name__ == '__main__':
     # data_origrin = "dataset/sweep_to_dustpan_2"
     # data_origrin = "dataset/push_0"
     # data_origrin = "dataset/sweep"
-    data_origrin = "dataset/sweep_to_dustpan1/episodes"
-    data_origrin = "dataset/drawing/episodes"
+    data_origrin = "dataset/real"
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
@@ -104,15 +108,15 @@ if __name__ == '__main__':
 
     dir_list = []
     for tf in trial_folder:
-        data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_mask')
+        data_folder_i = os.path.join(data_origrin)
+        save_folder_i = os.path.join(data_origrin, 'heatmap_huy_mask')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 
         else:
             pass
         
-        data_files = [os.path.join(data_origrin, tf, 'rgb',f) for f in os.listdir(data_folder_i)]
+        data_files = [os.path.join(data_origrin, f) for f in os.listdir(data_folder_i) if f[-4]=='.']
         data_files.sort()
 
         for fn in data_files:

@@ -47,36 +47,44 @@ class PrenormPixelLangEncoder(nn.Module):
         nn.init.uniform_(self.l6.weight, 0, 0.05)
         nn.init.uniform_(self.l6.bias, 0, 0.05)
 
-    def forward(self, pixel_x, lang_x, padding_mask):
+    def forward(self, key, query, padding_mask):
         # residual_lang = lang_x
 
-        pixel_x = self.pixel_PosEmb(pixel_x)
-        lang_x = self.lang_PosEmb(lang_x)
-                   
-        for _ in range(self.num_layers):
+        pixel_x = self.pixel_PosEmb(key)
+        lang_x = self.lang_PosEmb(query)
+
+        for l in range(self.num_layers):
             pixel_x_ = self.LayerNorm1(pixel_x).permute((1,0,2))
             lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype)).permute((1,0,2))
-
+            # print(l, pixel_x_, lang_x_ )
+            # breakpoint()
             # print(torch.sum(padding_mask, dim= -1), torch.sum(lang_x, dim = -1), torch.sum(pixel_x, dim = -1))
             x2, _ = self.multiheadattention(query = lang_x_, 
                                          key = pixel_x_, 
                                          value = pixel_x_,
                                          key_padding_mask = padding_mask)
+            
+            # print(l, x2)
+            # breakpoint()
+
             x2 = x2.permute((1,0,2))
             x2 = self.Dropout(x2)
 
+
             # Residual, only on the language path.
             x3 = lang_x + x2
-
+            # print(l, x3)
             # layer norm just the ffn input.
             x4 = self.LayerNorm3(x3)
-
+            # print(l, x4)
             # ffn.
             x5 = self.l5(x4)
             x5 = self.relu(x5)
+            # print(l, x5)
+
+    
             x5 = self.l6(x5)
             x5 = self.Dropout(x5)
-
             lang_x = x5 + x3
 
         return lang_x
@@ -104,6 +112,8 @@ class TemporalTransformer(nn.Module):
         # Followed the original config.
         self.Dropout = nn.Dropout(p = 0.1)
         self.PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
+        # print(self.PosEmb.requires_grad)
+        # breakpoint()
         self.PrenormEncoderLayer = nn.ModuleList([PrenormEncoderLayer(
                                     num_heads=self.num_heads,
                                     dropout_rate=0.1,

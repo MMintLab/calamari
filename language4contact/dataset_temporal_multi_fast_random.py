@@ -9,6 +9,7 @@ from language4contact.modules_shared import *
 from language4contact.utils import *
 from .Transformer_MM_Explainability.CLIP import clip 
 
+
 from tqdm import tqdm
 
 
@@ -25,15 +26,11 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         [0, 1, -1], [0, 1, 0], [0, 1, 1],
                     [1, -1, -1], [1, -1, 0], [1, -1, 1],
                         [1, 0, -1], [1, 0, 0], [1, 0, 1],
-                        [1, 1, -1], [1, 1, 0], [1, 1, 1],
-                        [0, -1, -1], [0, -1, 0], [0, -1, 1],
-                        [0, 0, -1], [0, 0, 1],
-                        [0, 1, -1], [0, 1, 0], [0, 1, 1],
-                    [1, -1, -1], [1, -1, 0], [1, -1, 1],
-                        [1, 0, -1], [1, 0, 0], [1, 0, 1],
                         [1, 1, -1], [1, 1, 0], [1, 1, 1]]
         elif mode == 'test':
             self.idx_lst = [[0, 0, 0]]
+
+
         
         # self.idx_lst = [[0, 0, 0] for _ in range(2)]
 
@@ -113,10 +110,6 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 traj_rgb_fn = folder2filelist(rgb_folder_path)
                 traj_rgb_fn.sort()
 
-                ## TODO: remove it 
-                traj_cnt_fn = traj_cnt_fn[1:]
-                traj_rgb_fn = traj_rgb_fn[1:]
-
                 traj_rgb_fn = traj_rgb_fn[:-1] # pop last obs
 
                 for local_idx in range(len(traj_rgb_fn)):
@@ -130,6 +123,20 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         traj_rgb_lst = list( reversed(traj_rgb_fn[local_idx-3:local_idx+1]))
                         traj_cnt_lst = [traj_cnt_fn[local_idx]]
 
+
+
+                    txt = txt_cmd
+                    traj_cnt_img = fn2img(traj_cnt_lst, d = 1)
+                    mask_ = get_traj_mask(traj_cnt_lst)
+                    self.cnt_w, self.cnt_h = mask_.shape
+                    traj_cnt_img = [traj_cnt_img[0]]
+                    fused_x, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(traj_rgb_lst, txt_cmd, task_n) 
+
+                    # visual_sentence, fused_x, vl_mask, tp_mask =  self.input_processing(traj_rgb_lst, txt, task_n, heatmap_folder = heatmap_folder)
+                    
+                    
+
+
                     # Save.
                     data_summary[tot_length] = {
                                                 "traj_rgb_paths": traj_rgb_lst,
@@ -137,54 +144,21 @@ class DatasetTemporal(torch.utils.data.Dataset):
                                                 "txt": txt_cmd,
                                                 "task": task_n,
                                                 "heatmap_folder":heatmap_folder,
+                                                "traj_cnt_img": traj_cnt_img,
+                                                "heatmaps": heatmaps,
+                                                "fused_x" : fused_x,
+                                                "vl_mask": vl_mask,
+                                                "tp_mask":tp_mask,
                                                 }
-                    for d_idx, aug_idx in enumerate(self.idx_lst):
-                        aug_length = len(self.idx_lst) * tot_length + d_idx
-                        
-                        txt = txt_cmd
-
-                        traj_cnt_img = fn2img(traj_cnt_lst, d = 1)
-                        mask_ = get_traj_mask(traj_cnt_lst)
-                        self.cnt_w, self.cnt_h = mask_.shape
-                        mask_t = torch.tensor(mask_).to(self.Config.device)
-                        
-                        aug_idx= np.array(aug_idx)
-                        aug_idx[1] = aug_idx[1] * np.random.randint(10,30)
-                        aug_idx[2] = aug_idx[2] * np.random.randint(10,30)
-                        # aug_idx = aug_idx[np.newaxis,:]
-
-                        if self.mode == 'train':
-                            traj_cnt_img =  augmentation(aug_idx, torch.stack(traj_cnt_img), rgb = False)   
-                        traj_cnt_img = [traj_cnt_img[0]]
-
-                        heatmap_ft, text_emb, vl_mask, tp_mask =  self.input_processing(traj_rgb_lst, txt, task_n, aug_idx = aug_idx, heatmap_folder = heatmap_folder)
-                        
-                        
-                        # print(traj_rgb_lst, vl_mask, tp_mask, torch.sum(visual_sentence, dim = -1) , torch.sum(fused_x, dim = -1) )
-
-                        # breakpoint()
-                        aug_summary[aug_length] = {
-                            "query": text_emb,
-                            "key" : heatmap_ft,
-                            "vl_mask": vl_mask,
-                            "tp_mask":tp_mask,
-                            "traj_cnt_img": traj_cnt_img, 
-                            "aug_idx": torch.tensor(aug_idx),
-
-                        }
-
-
+                    
 
                     # Increase idx.
                     tot_length += 1
-        # print(data_summary)
-        # breakpoint()
-        # print(aug_summary)
-        # breakpoint()
+
         return data_summary, aug_summary
 
 
-    def read_heatmap_temporal(self, img_pths, texts, task_i, aug_idx_i, heatmap_folder = None):
+    def read_heatmap_temporal(self, img_pths, texts, task_i, heatmap_folder = None):
 
         words_i = sentence2words(texts)
         if self.Config.heatmap_type == 'chefer':
@@ -206,7 +180,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         tp_masks = []
         vl_masks = torch.ones((self.Config.contact_seq_l, self.Config.max_sentence_l))
         # txt_emb_batch = torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, 512)).to(self.Config.device)
-        heatmaps_batch = torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, self.Config.heatmap_size[0], self.Config.heatmap_size[1])).to(self.Config.device)
+        heatmaps_batch = torch.zeros((self.Config.contact_seq_l, self.Config.max_sentence_l, self.Config.heatmap_size[0], self.Config.heatmap_size[1])) #.to(self.Config.device)
 
         # Batch
         # for b, img_pths in enumerate(img_batch_pths):
@@ -216,7 +190,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         #     flip_i = flip[b]
 
         # Read Texts as a token.
-        txt_emb_i = torch.zeros((self.Config.max_sentence_l, 512)).to(self.Config.device)
+        txt_emb_i = torch.zeros((self.Config.max_sentence_l, 512)) #.to(self.Config.device)
         txt_emb_i[:len(self.text_embs[task_i])] = self.text_embs[task_i]
         txt_emb_batch = txt_emb_i.unsqueeze(0).repeat((self.Config.contact_seq_l, 1, 1)) 
 
@@ -242,17 +216,17 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         # heatmap = Image.fromarray(augmentation(aug_idx_i, heatmap, rgb= False).numpy())
                         
                         # heatmap = heatmap.resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
-                        heatmap = torch.tensor( np.array(heatmap)).to(self.Config.device)
+                        heatmap = torch.tensor( np.array(heatmap)) #.to(self.Config.device)
 
                         # print(img_pth, wd, words_i, len(words_i), i)
                         # print(torch.sum( torch.tensor(heatmap), dim=(-1, -2)))
 
-                        
+                    
 
                         # print(heatmap.shape)
                         # breakpoint()
-                        if self.mode == 'train':
-                            heatmap = augmentation(aug_idx_i, heatmap, rgb= False)
+                        # if self.mode == 'train':
+                        #     heatmap = augmentation(aug_idx_i, heatmap, rgb= False)
                         heatmaps.append(heatmap)
 
                         # vl transformer mask = 0 : Real Input.
@@ -260,7 +234,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
                     
                     else:
                         # Fake (Padding) VL-transformer Inputs.
-                        padding = torch.zeros_like(heatmaps[-1]).to(self.Config.device)
+                        padding = torch.zeros_like(heatmaps[-1]) #.to(self.Config.device)
                         heatmaps.append(padding)
                         vl_masks[ -(l+1),i] = 1
 
@@ -284,59 +258,59 @@ class DatasetTemporal(torch.utils.data.Dataset):
         # heatmap_batch_ = torch.stack(heatmaps_batch)
         # heatmaps_batch = torch.flatten(heatmaps_batch, 0, 1)
         # txt_emb_batch = torch.flatten(txt_emb_batch, 0, 1)
-        vl_masks = vl_masks.to(self.Config.device) # Match heatmap size.
+        vl_masks = vl_masks #.to(self.Config.device) # Match heatmap size.
         # vl_masks = torch.flatten(vl_masks, 0, 1).to(self.Config.device) # Match heatmap size.
-        tp_masks = torch.tensor(tp_mask).to(self.Config.device)
+        tp_masks = torch.tensor(tp_mask) #.to(self.Config.device)
         return txt_emb_batch, heatmaps_batch, vl_masks.bool(), tp_masks.bool()
     
-    def input_processing(self, img, texts, tasks, mode = 'train', aug_idx = None, heatmap_folder = None):
-        """
-        mode = 'train' : load heatmap
-        mode = 'test' : generate heatmap every time step
-        """
-        # txt_emb, heatmaps, padding_mask = self.explainability.get_heatmap_temporal(img, texts)
-        self.B = len(img)
-        if aug_idx is None:
-            aug_idx = torch.zeros((self.B, 1))
+    # def input_processing(self, img, texts, tasks, mode = 'train', aug_idx = None, heatmap_folder = None):
+    #     """
+    #     mode = 'train' : load heatmap
+    #     mode = 'test' : generate heatmap every time step
+    #     """
+    #     # txt_emb, heatmaps, padding_mask = self.explainability.get_heatmap_temporal(img, texts)
+    #     self.B = len(img)
+    #     if aug_idx is None:
+    #         aug_idx = torch.zeros((self.B, 1))
 
        
-        text_emb, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, aug_idx, heatmap_folder = heatmap_folder) 
-        """
-        heatmaps : (B*l_temp) X l_lang x 225x225
-        """
+    #     fused_x, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, aug_idx, heatmap_folder = heatmap_folder) 
+    #     """
+    #     heatmaps : (B*l_temp) X l_lang x 225x225
+    #     """
         
-        hm_emb = []
+    #     hm_emb = []
 
-        ## Get clip attention
-        # heatmaps_ = heatmaps[ ~vl_mask] # zero image to padding
-        heatmaps_ = heatmaps[ ~vl_mask[:,0]] # zero image to padding
-
-
-        # print("hm", heatmaps_.shape)
-        img_enc_inp = torch.flatten(heatmaps_, 0, 1).unsqueeze(1).float()
-        img_enc_inp = torch.cat([img_enc_inp,
-                                  img_enc_inp,
-                                  img_enc_inp] , dim = 1)
-        # img_enc_inp = heatmaps_.unsqueeze(1).float()
-        # print(heatmaps_.shape)
-
-        self._image_encoder["model"](img_enc_inp)
-        out = self._image_encoder["activation"]['avgpool'].squeeze()
-        # out = self._image_encoder["model"](img_enc_inp)
+    #     ## Get clip attention
+    #     # heatmaps_ = heatmaps[ ~vl_mask] # zero image to padding
+    #     heatmaps_ = heatmaps[ ~vl_mask[:,0]] # zero image to padding
 
 
+    #     # print("hm", heatmaps_.shape)
+    #     img_enc_inp = torch.flatten(heatmaps_, 0, 1).unsqueeze(1).float()
+    #     img_enc_inp = torch.cat([img_enc_inp,
+    #                               img_enc_inp,
+    #                               img_enc_inp] , dim = 1)
+    #     # img_enc_inp = heatmaps_.unsqueeze(1).float()
+    #     # print(heatmaps_.shape)
 
-        # inp = torch.zeros((heatmaps.shape[0], out.shape[-1])).to(self.Config.device)
-        heatmap_ft = torch.zeros((heatmaps.shape[0], heatmaps.shape[1], out.shape[-1])).to(self.Config.device)
-        # print(inp.shape, heatmaps_.shape, out.shape)
-        # inp[ ~vl_mask] = out #.reshape((self.Config.contact_seq_l, self.Config.max_sentence_l, -1))
-        heatmap_ft[ ~vl_mask[:,0]] = out.reshape((heatmaps_.shape[0], heatmaps.shape[1], out.shape[-1]))
+    #     self._image_encoder["model"](img_enc_inp)
+    #     out = self._image_encoder["activation"]['avgpool'].squeeze()
+    #     # out = self._image_encoder["model"](img_enc_inp)
+
+
+
+    #     # inp = torch.zeros((heatmaps.shape[0], out.shape[-1])).to(self.Config.device)
+    #     visual_sentence = torch.zeros((heatmaps.shape[0], heatmaps.shape[1], out.shape[-1])).to(self.Config.device)
+    #     # print(inp.shape, heatmaps_.shape, out.shape)
+    #     # inp[ ~vl_mask] = out #.reshape((self.Config.contact_seq_l, self.Config.max_sentence_l, -1))
+    #     visual_sentence[ ~vl_mask[:,0]] = out.reshape((heatmaps_.shape[0], heatmaps.shape[1], out.shape[-1]))
         
 
 
-        # inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], out.shape[-1])) # [batch size x seq x feat_dim]
-        return heatmap_ft, text_emb, vl_mask, tp_mask
-        # return inp, txt_emb, vl_mask, tp_mask
+    #     # inp = inp.reshape(( heatmaps.shape[0], heatmaps.shape[1], out.shape[-1])) # [batch size x seq x feat_dim]
+    #     return visual_sentence, fused_x, vl_mask, tp_mask
+    #     # return inp, txt_emb, vl_mask, tp_mask
 
 
     def get_cnt_img_dim(self):
@@ -366,7 +340,18 @@ class DatasetTemporal(torch.utils.data.Dataset):
         if self.mode == 'test':
             idx = idx_raw
 
+        # w, h = self.aug_summary[idx_raw]['traj_cnt_img'][0].shape
+        # print( self.randomaffine.get_params(self.randomaffine.degrees, self.randomaffine.translate, 
+        #                                                 self.randomaffine.scale, self.randomaffine.shear, (w, h)))
 
+        # if idx_raw % len(self.idx_lst) !=0:
+        #     w, h = self.data_summary[idx]['traj_cnt_img'][0].shape
+        #     aug_param = self.randomaffine.get_params(self.randomaffine.degrees, self.randomaffine.translate, 
+        #                                                 self.randomaffine.scale, self.randomaffine.shear, (w, h))
+            
+        # else:
+        #     aug_param =  (0., (0., 0.), 1., (0.0, 0.0))
+ 
         traj_rgb_lst = self.data_summary[idx]["traj_rgb_paths"]
         traj_cnt_lst = self.data_summary[idx]["traj_cnt_paths"]
         heatmap_folder = self.data_summary[idx]["heatmap_folder"]
@@ -375,131 +360,70 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
 
         return   {
-                "query": self.aug_summary[idx_raw]['query'],
-                "key" : self.aug_summary[idx_raw]['key'],
-                "vl_mask": self.aug_summary[idx_raw]['vl_mask'],
-                "tp_mask":self.aug_summary[idx_raw]['tp_mask'],
-                "traj_cnt_img": self.aug_summary[idx_raw]['traj_cnt_img'], 
+                # "visual_sentence": self.data_summary[idx]['visual_sentence'],
+                "fused_x" : self.data_summary[idx]['fused_x'].to(self.Config.device),
+                "vl_mask": self.data_summary[idx]['vl_mask'].to(self.Config.device),
+                "tp_mask":self.data_summary[idx]['tp_mask'].to(self.Config.device),
+                "traj_cnt_img": self.data_summary[idx]['traj_cnt_img'], 
 
-                "aug_idx": torch.tensor(self.aug_summary[idx_raw]['aug_idx']),
+                "heatmaps": self.data_summary[idx]['heatmaps'].to(self.Config.device), 
+
+                # "aug_idx": aug_param,
                 "traj_rgb_paths": traj_rgb_lst, 
                 "traj_cnt_paths": traj_cnt_lst, 
-                # "mask_t": mask_t, 
+
                 "idx": idx_raw, 
                 "txt": txt, "task": task}
+
+        
     
-
 def augmentation( aug_idx, img, rgb = False):
-    flip = aug_idx[0]
-    delta_x  = aug_idx[1]
-    delta_y = aug_idx[2]
-
-    if flip == 1:
+    if aug_idx[0,0] == 1:
         if rgb:
             img = torch.flip(img, (-2,))
         else:
             img = torch.flip(img, (-1,))
 
+    delta = 20 * abs(aug_idx[0,1]) #np.random.randint(20,40)
     
-    if delta_x > 0:
+    if aug_idx[0,1] > 0:
         img_ = torch.zeros_like(img)
 
         if rgb:
-            img_[..., :img.shape[-2]-delta_x,:] = img[..., delta_x:,:]
+            img_[..., :img.shape[-2]-delta,:] = img[..., delta:,:]
         else:
-            img_[..., :img.shape[-1]-delta_x] = img[..., delta_x:]
+            img_[..., :img.shape[-1]-delta] = img[..., delta:]
         img = img_
 
-    elif delta_x < 0 :
+    elif aug_idx[0,1] < 0 :
         img_ = torch.zeros_like(img)
         if rgb:
-            img_[..., abs(delta_x):,:] = img[..., :img.shape[-2]-abs(delta_x),:]
+            img_[..., delta:,:] = img[..., :img.shape[-2]-delta,:]
         else:
-            img_[..., abs(delta_x):] = img[..., :img.shape[-1]-abs(delta_x)]
+            img_[..., delta:] = img[..., :img.shape[-1]-delta]
         img = copy.copy(img_)
 
+
+    delta = 20 * abs(aug_idx[0,2]) #np.random.randint(20,40)
     
 
     ori_shape = img.shape
     img = img.squeeze()
-    if delta_y > 0:
+    if aug_idx[0,2] > 0:
         img_ = torch.zeros_like(img)
         if rgb:
-            img_[..., :img.shape[-3]-delta_y, :,:] = img[..., delta_y:,:, :]
+            img_[..., :img.shape[-3]-delta, :,:] = img[..., delta:,:, :]
         else:
-            img_[..., :img.shape[-2]-delta_y,:] = img[..., delta_y:,:]
+            img_[..., :img.shape[-2]-delta,:] = img[..., delta:,:]
         img = img_
 
-    elif delta_y < 0 :
+    elif aug_idx[0,2] < 0 :
         img_ = torch.zeros_like(img)
         if rgb:
-            img_[ abs(delta_y):, :, :] = img[ :img.shape[-3]- abs(delta_y),:,:]
+            img_[ delta:, :, :] = img[ :img.shape[-3]-delta,:,:]
         else:
-            img_[...,  abs(delta_y):, :] = img[..., :img.shape[-2]- abs(delta_y), :]
+            img_[..., delta:, :] = img[..., :img.shape[-2]-delta, :]
         img = img_
     img = img.reshape(ori_shape)
-
-    # TODO: consider formatting
-    # Add Noise to the scale
-    # if not rgb:
-    #     if delta_x ==0 and delta_y ==0:
-    #         pass
-    #     else:
-    #         rand_scale = np.random.rand(1)[0] * 0.4 + 0.8 # 0.7 ~ 1.3
-    #         img = img * rand_scale
-    return img.to(torch.uint8) 
-
-
-# def augmentation( aug_idx, img, rgb = False):
-#     if aug_idx[0,0] == 1:
-#         if rgb:
-#             img = torch.flip(img, (-2,))
-#         else:
-#             img = torch.flip(img, (-1,))
-
-#     delta = 20 * abs(aug_idx[0,1]) #np.random.randint(20,40)
-    
-#     if aug_idx[0,1] > 0:
-#         img_ = torch.zeros_like(img)
-
-#         if rgb:
-#             img_[..., :img.shape[-2]-delta,:] = img[..., delta:,:]
-#         else:
-#             img_[..., :img.shape[-1]-delta] = img[..., delta:]
-#         img = img_
-
-#     elif aug_idx[0,1] < 0 :
-#         img_ = torch.zeros_like(img)
-#         if rgb:
-#             img_[..., delta:,:] = img[..., :img.shape[-2]-delta,:]
-#         else:
-#             img_[..., delta:] = img[..., :img.shape[-1]-delta]
-#         img = copy.copy(img_)
-
-
-#     delta = 20 * abs(aug_idx[0,2]) #np.random.randint(20,40)
-    
-
-#     ori_shape = img.shape
-#     img = img.squeeze()
-#     if aug_idx[0,2] > 0:
-#         img_ = torch.zeros_like(img)
-#         if rgb:
-#             img_[..., :img.shape[-3]-delta, :,:] = img[..., delta:,:, :]
-#         else:
-#             img_[..., :img.shape[-2]-delta,:] = img[..., delta:,:]
-#         img = img_
-
-#     elif aug_idx[0,2] < 0 :
-#         img_ = torch.zeros_like(img)
-#         if rgb:
-#             img_[ delta:, :, :] = img[ :img.shape[-3]-delta,:,:]
-#         else:
-#             img_[..., delta:, :] = img[..., :img.shape[-2]-delta, :]
-#         img = img_
-#     img = img.reshape(ori_shape)
-#     return img
-
-
-
+    return img
 

@@ -336,7 +336,6 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 "idx": idx_raw, 
                 "txt": txt, "task": task}
 
-
 def augmentation( aug_idx, img, rgb = False):
     if aug_idx[0,0] == 1:
         if rgb:

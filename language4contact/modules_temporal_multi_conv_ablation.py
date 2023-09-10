@@ -53,7 +53,7 @@ class policy(nn.Module):
         self.transformer_decoder = UNet_Decoder()
 
         # temporal transformer.
-        self.tp_transformer = TemporalTransformer(dim_in=Config.dim_emb, d_model = Config.dim_emb, sequence_length = self.L, device= self.device)
+        # self.tp_transformer = TemporalTransformer(dim_in=Config.dim_emb, d_model = Config.dim_emb, sequence_length = self.L, device= self.device)
         # self.model_grd = [self._image_encoder, self.vl_transformer_encoder,  self.transformer_decoder, self.tp_transformer]
 
     #     self.text_embs = self._get_text_emb()
@@ -78,13 +78,13 @@ class policy(nn.Module):
 
 
 
-    def forward_lava(self, visual_sentence, fused_x, vl_mask, tp_mask):
+    def forward_lava(self, query, key, vl_mask, tp_mask):
         # print("sums" , torch.sum(visual_sentence), torch.sum(fused_x))
         # breakpoint()
         self.B = tp_mask.shape[0]
 
-        visual_sentence = visual_sentence[ ~vl_mask[:,0]]
-        fused_x = fused_x[ ~vl_mask[:,0]]
+        query = query[ ~vl_mask[:,0]]
+        key = key[ ~vl_mask[:,0]]
         vl_mask_ = vl_mask[ ~vl_mask[:,0]]
 
 
@@ -96,22 +96,25 @@ class policy(nn.Module):
 
         # out = self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_) # L x (B * l_contact_seq) X ft
         # out = torch.mean(out, axis = 1) # TODO: remove?
-        out = torch.zeros((self.B * self.L, visual_sentence.shape[-1])).to(self.Config.device)
+        out = torch.zeros((self.B * self.L, query.shape[-1])).to(self.Config.device)
         # print(fused_x)
         # breakpoint()
-        out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_), axis = 1)
-        out = out.reshape((self.B , self.L, visual_sentence.shape[-1]))
-        # print("out", out[0])
+        out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(key = key, 
+                                                                    query = query, 
+                                                                    padding_mask = vl_mask_), axis = 1)
+        out = out.reshape((self.B , self.L, query.shape[-1]))
+        tp_output = out[:,-1,:].unsqueeze(2).unsqueeze(3) #.repeat((1, 4, 1, 1))
+        # print("tp_output", tp_output.shape)
         # breakpoint()
 
-        tp_mask_tmp= tp_mask.unsqueeze(2).repeat((1, 1, out.shape[-1])) # 1 padding
-        out = torch.where(tp_mask_tmp, torch.zeros_like(out).to(self.Config.device),  out)
+        # tp_mask_tmp= tp_mask.unsqueeze(2).repeat((1, 1, out.shape[-1])) # 1 padding
+        # tp_output = torch.where(tp_mask_tmp, torch.zeros_like(out).to(self.Config.device),  out)
 
         # tp_output = self.tp_transformer(out, padding_mask = tp_mask, type = 'stack')
-        tp_output = self.tp_transformer(out, padding_mask = tp_mask)
-        # print("tp_output", tp_output[0])
+        # tp_output = self.tp_transformer(out, padding_mask = tp_mask)
+        # print("tp_output", tp_output.shape)
 
-        tp_output = tp_output.unsqueeze(2).unsqueeze(3)
+        # tp_output = tp_output.unsqueeze(2).unsqueeze(3)
 
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
         # print("tp_output", contact[0])

@@ -45,6 +45,7 @@ class ContactEnergy():
         ## Image Encoder
         # self.image_encoder = image_encoder(self.Config.device, dim_in = 1 , dim_out = int(self.Config.dim_emb))
         self.image_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        self.image_encoder = self.change_layers(self.image_encoder) # TODO: remove 
         self.image_encoder.to(self.Config.device).eval()
         self.image_encoder.avgpool.register_forward_hook(self.get_activation('avgpool'))
 
@@ -72,7 +73,8 @@ class ContactEnergy():
         ## Set optimizer
         self.test = False if test_idx is None else True
         self.optim = torch.optim.Adam(
-                [   {"params" : self.policy.parameters()}
+                [   {"params" : self.policy.parameters()},
+                    {"params" : self.image_encoder.parameters()},
                 ], lr=1e-3)
 
 
@@ -124,15 +126,16 @@ class ContactEnergy():
 
 
             # inp, txt_emb, vl_mask, tp_mask
-            query = data["query"].flatten(0,1)
-            key = data["key"].flatten(0,1)
+            visual_sentence = data["visual_sentence"].flatten(0,1)
+            fused_x = data["fused_x"].flatten(0,1)
             vl_mask = data["vl_mask"].flatten(0,1)
             tp_mask = data["tp_mask"]
             # visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks, flip = flip)
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
 
-            contact_seq = self.policy.module.forward_lava(query, key, vl_mask = vl_mask, tp_mask = tp_mask)
+            
+            contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
             # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
@@ -308,5 +311,5 @@ class ContactEnergy():
         return rgb
 
 # CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-CE = ContactEnergy( log_path = 'sweep_corl_reprod')
+CE = ContactEnergy( log_path = 'red_100_0515')
 CE.get_energy_field()

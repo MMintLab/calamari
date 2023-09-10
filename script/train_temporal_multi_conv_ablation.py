@@ -7,7 +7,7 @@ import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2, 3"
 
 from language4contact.utils import *
-from language4contact.modules_temporal_multi_conv import  policy
+from language4contact.modules_temporal_multi_conv_ablation import  policy
 from language4contact.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
 from language4contact.modules_shared import *
@@ -124,15 +124,16 @@ class ContactEnergy():
 
 
             # inp, txt_emb, vl_mask, tp_mask
-            query = data["query"].flatten(0,1)
-            key = data["key"].flatten(0,1)
+            visual_sentence = data["visual_sentence"].flatten(0,1)
+            fused_x = data["fused_x"].flatten(0,1)
             vl_mask = data["vl_mask"].flatten(0,1)
             tp_mask = data["tp_mask"]
             # visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks, flip = flip)
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
 
-            contact_seq = self.policy.module.forward_lava(query, key, vl_mask = vl_mask, tp_mask = tp_mask)
+            
+            contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
             # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
@@ -308,5 +309,5 @@ class ContactEnergy():
         return rgb
 
 # CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-CE = ContactEnergy( log_path = 'sweep_corl_reprod')
+CE = ContactEnergy( log_path = 'wipe_temporal_ablation')
 CE.get_energy_field()

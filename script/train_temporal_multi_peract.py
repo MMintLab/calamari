@@ -14,6 +14,13 @@ from language4contact.modules_shared import *
 
 from language4contact.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
 import tensorflow as tf
+from cliport.cliport.agents import TwoStreamClipLingUNetLatTransporterAgent
+import numpy as np
+
+from cliport.utils import utils
+from cliport.models.streams.two_stream_attention_lang_fusion import TwoStreamAttentionLangFusionLat
+from cliport.models.streams.two_stream_transport_lang_fusion import TwoStreamTransportLangFusionLat
+
 
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
@@ -42,11 +49,6 @@ class ContactEnergy():
 
 
         self.activation = {}
-        ## Image Encoder
-        # self.image_encoder = image_encoder(self.Config.device, dim_in = 1 , dim_out = int(self.Config.dim_emb))
-        self.image_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
-        self.image_encoder.to(self.Config.device).eval()
-        self.image_encoder.avgpool.register_forward_hook(self.get_activation('avgpool'))
 
 
         ## Data-loader
@@ -59,15 +61,28 @@ class ContactEnergy():
 
         self.test_dataLoader = DataLoader(dataset=self.test_dataset,
                          batch_size=self.Config.B, shuffle=False, drop_last=False)
+        
 
-        # print("Train dataset size", self.train_dataset.__len__(), "Test dataset size", self.test_dataset.__len__())
+        stream_one_fcn = 'plain_resnet_lat'
+        stream_two_fcn = 'clip_lingunet_lat'
+
+        self.transport = TwoStreamTransportLangFusionLat(
+            stream_fcn=(stream_one_fcn, stream_two_fcn),
+            in_shape= (256, 256, 6), # TODO
+            n_rotations= 36,
+            crop_size= 64, # TODO
+            preprocess=utils.preprocess, # TODO
+            cfg=self.cliport_cfg, # TODO
+            device=self.device,
+        )
+
+
+
 
 
         ## Define policy model
         dimout = self.train_dataset.cnt_w * self.train_dataset.cnt_h
 
-        self.policy = policy(dim_in = self.train_dataset.cnt_w, dim_out= dimout, image_size = self.train_dataset.cnt_w, Config=self.Config)
-        self.policy = nn.DataParallel(self.policy.to(self.Config.device),device_ids=[1,2])
 
         ## Set optimizer
         self.test = False if test_idx is None else True
@@ -124,15 +139,16 @@ class ContactEnergy():
 
 
             # inp, txt_emb, vl_mask, tp_mask
-            query = data["query"].flatten(0,1)
-            key = data["key"].flatten(0,1)
+            visual_sentence = data["visual_sentence"].flatten(0,1)
+            fused_x = data["fused_x"].flatten(0,1)
             vl_mask = data["vl_mask"].flatten(0,1)
             tp_mask = data["tp_mask"]
             # visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks, flip = flip)
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
 
-            contact_seq = self.policy.module.forward_lava(query, key, vl_mask = vl_mask, tp_mask = tp_mask)
+            
+            contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
             # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
@@ -308,5 +324,5 @@ class ContactEnergy():
         return rgb
 
 # CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-CE = ContactEnergy( log_path = 'sweep_corl_reprod')
+CE = ContactEnergy( log_path = 'sweep_0622')
 CE.get_energy_field()

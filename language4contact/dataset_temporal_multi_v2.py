@@ -99,6 +99,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 cnt_folder_path = f'{task["data_dir"]}/episode{i}/contact_front'
                 rgb_folder_path = f'{task["data_dir"]}/episode{i}/rgb'
 
+
                 traj_cnt_fn = folder2filelist(cnt_folder_path)
                 traj_cnt_fn.sort()
 
@@ -205,9 +206,9 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         heatmaps_in_fn[-1].append(hm_pth)
 
                         # read txt emb.
-                        # with open(hm_pth.replace('png', 'npy'), 'rb') as f:
-                        #     txt_i = torch.tensor(np.load(f))
-                        #     txts.append( txt_i)
+                        with open(hm_pth.replace('png', 'npy'), 'rb') as f:
+                            txt_i = torch.tensor(np.load(f))
+                            txts.append( txt_i)
 
                         text = clip.tokenize(wd).to(self.Config.device)
                         txt_emb_i = self.explainability.model.encode_text(text)
