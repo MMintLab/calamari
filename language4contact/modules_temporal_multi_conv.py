@@ -78,13 +78,13 @@ class policy(nn.Module):
 
 
 
-    def forward_lava(self, visual_sentence, fused_x, vl_mask, tp_mask):
+    def forward_lava(self, key, query, vl_mask, tp_mask):
         # print("sums" , torch.sum(visual_sentence), torch.sum(fused_x))
         # breakpoint()
         self.B = tp_mask.shape[0]
 
-        visual_sentence = visual_sentence[ ~vl_mask[:,0]]
-        fused_x = fused_x[ ~vl_mask[:,0]]
+        key = key[ ~vl_mask[:,0]]
+        query = query[ ~vl_mask[:,0]]
         vl_mask_ = vl_mask[ ~vl_mask[:,0]]
 
 
@@ -96,11 +96,11 @@ class policy(nn.Module):
 
         # out = self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_) # L x (B * l_contact_seq) X ft
         # out = torch.mean(out, axis = 1) # TODO: remove?
-        out = torch.zeros((self.B * self.L, visual_sentence.shape[-1])).to(self.Config.device)
+        out = torch.zeros((self.B * self.L, key.shape[-1])).to(self.Config.device)
         # print(fused_x)
         # breakpoint()
-        out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_), axis = 1)
-        out = out.reshape((self.B , self.L, visual_sentence.shape[-1]))
+        out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(key=key, query=query, padding_mask = vl_mask_), axis = 1)
+        out = out.reshape((self.B , self.L, key.shape[-1]))
         # print("out", out[0])
         # breakpoint()
 

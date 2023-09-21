@@ -33,7 +33,7 @@ def generate_heatmap(
     """
     print(file_path)
     img = np.array(imageio.imread(file_path))
-    # img = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
+    img = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
 
 
     save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])

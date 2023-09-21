@@ -114,8 +114,8 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 traj_rgb_fn.sort()
 
                 ## TODO: remove it 
-                traj_cnt_fn = traj_cnt_fn[1:]
-                traj_rgb_fn = traj_rgb_fn[1:]
+                # traj_cnt_fn = traj_cnt_fn[1:]
+                # traj_rgb_fn = traj_rgb_fn[1:]
 
                 traj_rgb_fn = traj_rgb_fn[:-1] # pop last obs
 
@@ -124,12 +124,17 @@ class DatasetTemporal(torch.utils.data.Dataset):
                     # t-3, t-2, t-1, t RGB
                     if local_idx < self.contact_seq_l:
                         traj_rgb_lst = ['','','','']
-                        traj_rgb_lst[:local_idx+1] = list( reversed(traj_rgb_fn[:local_idx+1]))
+                        # traj_rgb_lst[:local_idx+1] = list( reversed(traj_rgb_fn[:local_idx+1]))
+                        # traj_rgb_lst[-(local_idx+1):] = list( reversed(traj_rgb_fn[:local_idx+1]))
+                        traj_rgb_lst[-(local_idx+1):] =  traj_rgb_fn[:local_idx+1]
+
                         traj_cnt_lst = [traj_cnt_fn[local_idx]]
                     else:
                         traj_rgb_lst = list( reversed(traj_rgb_fn[local_idx-3:local_idx+1]))
                         traj_cnt_lst = [traj_cnt_fn[local_idx]]
 
+                    # print(traj_rgb_lst, traj_cnt_lst )
+                    # breakpoint()
                     # Save.
                     data_summary[tot_length] = {
                                                 "traj_rgb_paths": traj_rgb_lst,
@@ -221,8 +226,8 @@ class DatasetTemporal(torch.utils.data.Dataset):
         txt_emb_batch = txt_emb_i.unsqueeze(0).repeat((self.Config.contact_seq_l, 1, 1)) 
 
         # Image seq
+
         for l, img_pth in enumerate(img_pths):
-            
             if len(img_pth) > 0:
                 heatmaps = []
 
@@ -244,10 +249,6 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         # heatmap = heatmap.resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
                         heatmap = torch.tensor( np.array(heatmap)).to(self.Config.device)
 
-                        # print(img_pth, wd, words_i, len(words_i), i)
-                        # print(torch.sum( torch.tensor(heatmap), dim=(-1, -2)))
-
-                        
 
                         # print(heatmap.shape)
                         # breakpoint()
@@ -256,28 +257,24 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         heatmaps.append(heatmap)
 
                         # vl transformer mask = 0 : Real Input.
-                        vl_masks[-(l+1),i] = 0
+                        # vl_masks[-(l+1),i] = 0
+                        vl_masks[l,i] = 0
+
                     
                     else:
                         # Fake (Padding) VL-transformer Inputs.
                         padding = torch.zeros_like(heatmaps[-1]).to(self.Config.device)
                         heatmaps.append(padding)
-                        vl_masks[ -(l+1),i] = 1
+                        # vl_masks[ -(l+1),i] = 1
+                        vl_masks[l,i] = 1
+
 
                 # Real Temporal-transformer Inputs.   
-                # txt_emb_batch.insert(0, txt_emb_i)
-                # txt_emb_batch[b,-(l+1),:] = txt_emb_i
-                heatmaps_batch[-(l+1),:] = torch.stack(heatmaps)
-                # heatmaps_batch.insert( 0,torch.stack(heatmaps))
-                tp_mask.insert(0, 0)
+                heatmaps_batch[l,:] = torch.stack(heatmaps)
+                tp_mask.append(0)
 
             elif len(img_pth) == 0: 
-                # Fake (Padding) Temporal-transformer Inputs.
-                # txt_emb_i = torch.zeros_like(txt_emb_batch[0,0,...]).to(self.device)
-                # heatmaps = torch.zeros_like(heatmaps_batch[0,0,...]).to(self.device)
-                # txt_emb_batch.insert(0,txt_emb_i)
-                # heatmaps_batch.insert(0,heatmaps)
-                tp_mask.insert(0,1)
+                tp_mask.append(1)
 
 
         # Formatting.

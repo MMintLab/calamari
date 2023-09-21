@@ -31,12 +31,15 @@ def generate_heatmap(
     :param  img np.nparray (0~255.)
     """
     img = np.array(imageio.imread(file_path))
+    img = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
+
+
     save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])
     if not os.path.exists(save_folder_):
         os.mkdir(save_folder_) 
     else:
         print(save_folder_, "exists")
-        return
+        # return
 
     assert img.dtype == np.uint8
     h, w, c = img.shape
@@ -82,7 +85,7 @@ if __name__ == '__main__':
     # keywords = ["use","the", "sponge","to" ,"clean" ,"up", "the" ,"dirt"]
 
     keywords = ["sweep", "Use","the","broom","to","brush","dirt","into","dustpan"]
-    keywords = ["draw", "C","the","letter"]
+    # keywords = ["draw", "C","the","letter"]
 
     # keywords = ["Scoop","up","the","block","and","lift","it","with","spatula"]
     # keywords = ["Press","push", "the", "then", "red","orange", "purple", "teal", "azure", "violet", "black", "white", "maroon", "green", "rose", "blue", "navy", "yellow", "cyan", "silver", "gray", "olive", "magenta", "button"]
@@ -96,7 +99,7 @@ if __name__ == '__main__':
     # data_origrin = "dataset/push_0"
     # data_origrin = "dataset/sweep"
     data_origrin = "dataset/sweep_to_dustpan1/episodes"
-    data_origrin = "dataset/drawing/episodes"
+    # data_origrin = "dataset/drawing/episodes"
 
     trial_folder = os.listdir(data_origrin)
     trial_folder.sort()
@@ -105,7 +108,7 @@ if __name__ == '__main__':
     dir_list = []
     for tf in trial_folder:
         data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_mask')
+        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_mask_filter')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 

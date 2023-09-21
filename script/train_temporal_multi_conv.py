@@ -132,7 +132,10 @@ class ContactEnergy():
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
 
-            contact_seq = self.policy.module.forward_lava(query, key, vl_mask = vl_mask, tp_mask = tp_mask)
+            # print(key, query, vl_mask, tp_mask)
+            # breakpoint()
+
+            contact_seq = self.policy.module.forward_lava(key=key, query=query, vl_mask = vl_mask, tp_mask = tp_mask)
             # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
@@ -193,7 +196,7 @@ class ContactEnergy():
             if i % 20 == 0 or i == self.Config.epoch -1: 
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, 
                                                                                       write = True,
-                                                                                        N = np.amin([60, self.train_dataset.__len__()]),
+                                                                                        N = np.amin([600, self.train_dataset.__len__()]),
                                                                                         mode = 'train')
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
@@ -308,5 +311,5 @@ class ContactEnergy():
         return rgb
 
 # CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-CE = ContactEnergy( log_path = 'sweep_corl_reprod')
+CE = ContactEnergy( log_path = 'wipe_camera')
 CE.get_energy_field()
