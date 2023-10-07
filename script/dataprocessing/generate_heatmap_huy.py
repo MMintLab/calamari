@@ -31,7 +31,7 @@ def generate_heatmap(
     :param  img np.nparray (0~255.)
     """
     img = np.array(imageio.imread(file_path))
-    img = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
+    # img = cv2.fastNlMeansDenoisingColored(img,None,10,10,7,21)
 
 
     save_folder_ = os.path.join(save_folder, file_path.split('.')[0].split('/')[-1])
@@ -98,24 +98,25 @@ if __name__ == '__main__':
     # data_origrin = "dataset/sweep_to_dustpan_2"
     # data_origrin = "dataset/push_0"
     # data_origrin = "dataset/sweep"
-    data_origrin = "dataset/sweep_to_dustpan1/episodes"
+    # data_origrin = "dataset/sweep_to_dustpan1/episodes"
     # data_origrin = "dataset/drawing/episodes"
+    data_origin = 'dataset/wipe_0603_2'
 
-    trial_folder = os.listdir(data_origrin)
+    trial_folder = os.listdir(data_origin)
     trial_folder.sort()
     # trial_folder = trial_folder[105:]
 
     dir_list = []
     for tf in trial_folder:
-        data_folder_i = os.path.join(data_origrin, tf, 'rgb')
-        save_folder_i = os.path.join(data_origrin, tf, 'heatmap_huy_mask_filter')
+        data_folder_i = os.path.join(data_origin, tf, 'rgb')
+        save_folder_i = os.path.join(data_origin, tf, 'heatmap_huy_mask_workspace')
         
         if not os.path.exists(save_folder_i):
             os.mkdir(save_folder_i) 
         else:
             pass
         
-        data_files = [os.path.join(data_origrin, tf, 'rgb',f) for f in os.listdir(data_folder_i)]
+        data_files = [os.path.join(data_origin, tf, 'rgb',f) for f in os.listdir(data_folder_i)]
         data_files.sort()
 
         for fn in data_files:

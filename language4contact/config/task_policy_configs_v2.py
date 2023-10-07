@@ -37,7 +37,7 @@ class TaskConfig():
             "train_idx": np.arange(0, 100),
             # "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
             "test_idx": np.arange(100, 120),
-            "heatmap_folder": "heatmap_huy_mask/"
+            "heatmap_folder": "heatmap_huy_mask_by_sentence/"
         },
             # "sweep": {
             #     "data_dir": "dataset/sweep_to_dustpan1/episodes",
@@ -48,18 +48,20 @@ class TaskConfig():
             #     "train_idx": np.arange(0,100),
             #     # "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
             #     "test_idx": np.arange(100, 120),
-            #     "heatmap_folder": "heatmap_huy_mask_filter/"
+            #     "heatmap_folder": "heatmap_huy_mask_by_sentence/"
+            #     # "heatmap_folder": "heatmap_huy_mask_filter/"
             # },
             # "push": {
             #     "data_dir": "dataset/push_0515",
             #     "contact_folder": 'contact_front',
             #     "txt_cmd": self.language_prompts["press"][0],
-            #     " tool_name": 'Panda_leftfinger_respondable',
+            #     "tool_name": 'Panda_leftfinger_respondable',
             #     'target_name': 'target_button_topPlate0',
             #     "train_idx": np.arange(0, 100),
             #     # "train_idx": np.concatenate([np.arange(0,95), np.arange(95,105)]),
-            #     "test_idx": np.arange(100, 120),
-            #     "heatmap_folder": "heatmap_huy_mask/"
+            #     "test_idx": np.arange(100, 120), #
+            #     "heatmap_folder": "heatmap_huy_mask_by_sentence/",
+            #     # "heatmap_folder": "heatmap_huy_mask/"
             #     # "heatmap_folder": "heatmap_huy_center_/"
             # },
             # "scoop": {"data_dir": "dataset/scoop_0518",

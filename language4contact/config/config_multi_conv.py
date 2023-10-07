@@ -17,7 +17,7 @@ class Config:
         self.epoch = 8000
         self.gamma = 0.96
 
-        self.B = 300
+        self.B = 1000 #300
         self.device = 'cuda'
         self.dim_emb = 512
         self.dim_ft = 32 # 32

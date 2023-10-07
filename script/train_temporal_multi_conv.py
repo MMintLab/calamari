@@ -113,7 +113,7 @@ class ContactEnergy():
             l = data["idx"]
             rgb = list(zip(*data['traj_rgb_paths']))
             traj_cnt_lst = list(zip(*data['traj_cnt_paths'])) #([B, input_length, img_w, img_h])\
-            traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0)
+            traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0).to(self.Config.device)
             txt = list(data['txt'])
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
@@ -141,7 +141,7 @@ class ContactEnergy():
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
             # loss
-            loss0_i = torch.norm( traj_cnt_img.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
+            loss0_i = torch.norm( traj_cnt_img - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
             # print(loss0_i,  torch.norm(traj_cnt_img.to(self.Config.device)), torch.norm(contact_seq.to(self.Config.device)))
             loss0_i = 1e5 * loss0_i
             
@@ -165,10 +165,10 @@ class ContactEnergy():
                     l_i = l[l_ir] # Batch index -> real idx
                     if l_i < N: 
                         # print(l_i, rgb_i_)
-                        # contact_seq_round = round_mask(traj_cnt_img[l_ir])
+                        # contact_seq_round = round_mask(traj_cnt_img[l_ir]).detach().cpu()
                         contact_seq_round = round_mask(contact_seq[l_ir].detach().cpu())
                         contact_histories[l_i] = contact_seq_round
-                        contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir])
+                        contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir].numpy())
                         # l_i_hist.append(l_i)
                     # l_ir += 1
             # print("4:", time.time()-t)
@@ -213,9 +213,8 @@ class ContactEnergy():
                                                                                       mode = 'test')
                 self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, tot_loss)
 
-
     def save_model(self, epoch):
-        if epoch % 1000 == 0:
+        if epoch % 100 == 0:
             path_model = self.logdir + f"/policy_{epoch}.pth"
             path_optim = self.logdir + f"/optim_{epoch}.pth"
         else: 
@@ -301,7 +300,8 @@ class ContactEnergy():
         # torch.flip(rgb, (-2,))
 
         # print(rgb, cnt_pred)
-        cnt_pred = torch.tensor(cnt_pred) * 255
+        # cnt_pred = torch.tensor(cnt_pred) * 255
+        cnt_pred = cnt_pred * 255
         cnt_pred = cnt_pred.to(torch.uint8)
         iidx, jidx = torch.where( cnt_pred != 0)
         rgb[iidx, jidx,0] = cnt_pred[iidx, jidx] #* 255.
@@ -311,5 +311,7 @@ class ContactEnergy():
         return rgb
 
 # CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-CE = ContactEnergy( log_path = 'wipe_camera')
+# CE = ContactEnergy( log_path = 'wipe_scale_1003')
+CE = ContactEnergy( log_path = 'wipe_1005')
+
 CE.get_energy_field()

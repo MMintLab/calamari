@@ -4,6 +4,7 @@ from pathlib import Path
 import math
 import torch
 import torch.utils.data as data_utils
+import torchvision.transforms as T
 
 from language4contact.modules_shared import *
 from language4contact.utils import *
@@ -18,6 +19,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         self.contact_seq_l = self.Config.contact_seq_l
         self.mode = mode 
         self.return_seq_l = seq_l
+        self.N_noise_aug = 5
         # get language embeddings
         if mode == 'train':
             self.idx_lst = [[0, -1, -1], [0, -1, 0], [0, -1, 1],
@@ -32,6 +34,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
                     [1, -1, -1], [1, -1, 0], [1, -1, 1],
                         [1, 0, -1], [1, 0, 0], [1, 0, 1],
                         [1, 1, -1], [1, 1, 0], [1, 1, 1]]
+            self.idx_lst =  self.idx_lst * self.N_noise_aug
         elif mode == 'test':
             self.idx_lst = [[0, 0, 0]]
         
@@ -158,21 +161,32 @@ class DatasetTemporal(torch.utils.data.Dataset):
                         aug_idx[2] = aug_idx[2] * np.random.randint(10,30)
                         # aug_idx = aug_idx[np.newaxis,:]
 
+
+                        # scale augmentation
+                        # scale = np.random.random() * 0.3 + 0.85
+                        scale = 1
+                        aug_idx = np.append(aug_idx, scale)
+
                         if self.mode == 'train':
                             traj_cnt_img =  augmentation(aug_idx, torch.stack(traj_cnt_img), rgb = False)   
-                        traj_cnt_img = [traj_cnt_img[0]]
+                        traj_cnt_img = [traj_cnt_img[0].detach().cpu()]
 
-                        heatmap_ft, text_emb, vl_mask, tp_mask =  self.input_processing(traj_rgb_lst, txt, task_n, aug_idx = aug_idx, heatmap_folder = heatmap_folder)
+                        noise_idx = d_idx % self.N_noise_aug
+                        heatmap_ft, text_emb, vl_mask, tp_mask =  self.input_processing(traj_rgb_lst,
+                                                                                         txt, task_n, 
+                                                                                         aug_idx = aug_idx, 
+                                                                                         heatmap_folder = heatmap_folder,
+                                                                                         noise_idx = noise_idx)
                         
                         
                         # print(traj_rgb_lst, vl_mask, tp_mask, torch.sum(visual_sentence, dim = -1) , torch.sum(fused_x, dim = -1) )
 
                         # breakpoint()
                         aug_summary[aug_length] = {
-                            "query": text_emb,
-                            "key" : heatmap_ft,
-                            "vl_mask": vl_mask,
-                            "tp_mask":tp_mask,
+                            "query": text_emb.detach().cpu(),
+                            "key" : heatmap_ft.detach().cpu(),
+                            "vl_mask": vl_mask.detach().cpu(),
+                            "tp_mask":tp_mask.detach().cpu(),
                             "traj_cnt_img": traj_cnt_img, 
                             "aug_idx": torch.tensor(aug_idx),
 
@@ -189,7 +203,8 @@ class DatasetTemporal(torch.utils.data.Dataset):
         return data_summary, aug_summary
 
 
-    def read_heatmap_temporal(self, img_pths, texts, task_i, aug_idx_i, heatmap_folder = None):
+    def read_heatmap_temporal(self, img_pths, texts, task_i, aug_idx_i, heatmap_folder = None, noise_idx = None):
+        # print(self.mode, img_pths, heatmap_folder, aug_idx_i, noise_idx)
 
         words_i = sentence2words(texts)
         if self.Config.heatmap_type == 'chefer':
@@ -242,19 +257,19 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
                         # Load word-wise heatmaps.
                         hm_pth = img_pth.replace('rgb/', cnt_dir).split('.')[0]
-                        hm_pth = os.path.join(hm_pth, wd + '.png')
+                        hm_pth = os.path.join(hm_pth, wd + '.png') if noise_idx is None else os.path.join(hm_pth, wd + f'_{noise_idx}.png')
                         heatmap = Image.open(hm_pth)
+                        heatmap = torch.tensor(np.array(heatmap))
                         # heatmap = Image.fromarray(augmentation(aug_idx_i, heatmap, rgb= False).numpy())
                         
-                        # heatmap = heatmap.resize((self.Config.heatmap_size[0], self.Config.heatmap_size[1]))
-                        heatmap = torch.tensor( np.array(heatmap)).to(self.Config.device)
+                        # heatmap = hehttps://studio.youtube.com/channel/UCLNmkcUHL0f9nGZ4YoV-4Yw/videos/upload?filter=%5B%5D&sort=%7B%22columnType%22%3A%22date%22%2C%22sortOrder%22%3A%22DESCENDING%22%7Dh.tensor( np.array(heatmap)).to(self.Config.device)
 
 
                         # print(heatmap.shape)
                         # breakpoint()
                         if self.mode == 'train':
-                            heatmap = augmentation(aug_idx_i, heatmap, rgb= False)
-                        heatmaps.append(heatmap)
+                            heatmap = augmentation(aug_idx_i, heatmap, rgb= False, device=self.Config.device)
+                        heatmaps.append(heatmap.to(self.Config.device))
 
                         # vl transformer mask = 0 : Real Input.
                         # vl_masks[-(l+1),i] = 0
@@ -286,18 +301,18 @@ class DatasetTemporal(torch.utils.data.Dataset):
         tp_masks = torch.tensor(tp_mask).to(self.Config.device)
         return txt_emb_batch, heatmaps_batch, vl_masks.bool(), tp_masks.bool()
     
-    def input_processing(self, img, texts, tasks, mode = 'train', aug_idx = None, heatmap_folder = None):
+    def input_processing(self, img, texts, tasks, mode = 'train', aug_idx = None, heatmap_folder = None, noise_idx = None, scale = 1):
         """
         mode = 'train' : load heatmap
         mode = 'test' : generate heatmap every time step
         """
         # txt_emb, heatmaps, padding_mask = self.explainability.get_heatmap_temporal(img, texts)
         self.B = len(img)
-        if aug_idx is None:
-            aug_idx = torch.zeros((self.B, 1))
+        # if aug_idx is None:
+        #     aug_idx = torch.zeros((self.B, 1))
 
        
-        text_emb, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, aug_idx, heatmap_folder = heatmap_folder) 
+        text_emb, heatmaps, vl_mask, tp_mask = self.read_heatmap_temporal(img, texts, tasks, aug_idx, heatmap_folder = heatmap_folder,  noise_idx = noise_idx) 
         """
         heatmaps : (B*l_temp) X l_lang x 225x225
         """
@@ -372,13 +387,14 @@ class DatasetTemporal(torch.utils.data.Dataset):
 
 
         return   {
-                "query": self.aug_summary[idx_raw]['query'],
-                "key" : self.aug_summary[idx_raw]['key'],
-                "vl_mask": self.aug_summary[idx_raw]['vl_mask'],
-                "tp_mask":self.aug_summary[idx_raw]['tp_mask'],
-                "traj_cnt_img": self.aug_summary[idx_raw]['traj_cnt_img'], 
+                "query": self.aug_summary[idx_raw]['query'].to(self.Config.device),
+                "key" : self.aug_summary[idx_raw]['key'].to(self.Config.device),
+                "vl_mask": self.aug_summary[idx_raw]['vl_mask'].to(self.Config.device),
+                "tp_mask":self.aug_summary[idx_raw]['tp_mask'].to(self.Config.device),
+                "traj_cnt_img": [i.to(self.Config.device) for i in self.aug_summary[idx_raw]['traj_cnt_img']], 
+                "aug_idx": self.aug_summary[idx_raw]['aug_idx'],
 
-                "aug_idx": torch.tensor(self.aug_summary[idx_raw]['aug_idx']),
+                # "aug_idx": torch.tensor(self.aug_summary[idx_raw]['aug_idx']),
                 "traj_rgb_paths": traj_rgb_lst, 
                 "traj_cnt_paths": traj_cnt_lst, 
                 # "mask_t": mask_t, 
@@ -386,10 +402,50 @@ class DatasetTemporal(torch.utils.data.Dataset):
                 "txt": txt, "task": task}
     
 
-def augmentation( aug_idx, img, rgb = False):
+def augmentation( aug_idx, img, rgb = False, device = 'cpu'):
     flip = aug_idx[0]
-    delta_x  = aug_idx[1]
-    delta_y = aug_idx[2]
+    delta_x  = int(aug_idx[1])
+    delta_y = int(aug_idx[2])
+
+    rgb = True if img.shape[-1] == 3 else False
+
+    if np.sum(aug_idx) != 0 :
+        img_shape_ori = img.shape
+        w = img.shape[-2]
+        s = aug_idx[-1]
+
+        transform = T.Resize(size = (int(w*s), int(w*s)))
+        # print("cpt0", img.squeeze().unsqueeze(0).shape)
+        if rgb:
+            img = transform(img.permute((2, 0, 1))) 
+            img = img.permute((1,2,0))
+
+        else:
+            img = transform(img.squeeze().unsqueeze(0))
+        if s>1:
+            if rgb:
+                img = img[-w:, (img.shape[-2] - w)//2: (img.shape[-2] - w)//2 + w, :]
+                img = img.reshape(img_shape_ori)
+            else:
+                img = img[..., -w:, (img.shape[-2] - w)//2: (img.shape[-2] - w)//2 + w]
+                img = img.reshape(img_shape_ori)
+        else:
+            if rgb:
+                img_ = torch.zeros(img_shape_ori).to(device)
+                img_[-img.shape[-2]:, 
+                    -(img.shape[-2] - w)//2: -(img.shape[-2] - w)//2 + img.shape[-2], :]=img
+                img = img_.reshape(img_shape_ori)
+            else:
+                img_ = torch.zeros(img_shape_ori).to(device)
+                img_[...,-img.shape[-2]:, 
+                    -(img.shape[-2] - w)//2: -(img.shape[-2] - w)//2 + img.shape[-1]]=img.squeeze()
+                img = img_.reshape(img_shape_ori)
+
+        # print(img.shape, w, h)
+        # img = cv2.resize(img.detach().cpu().numpy(), (w//2, h), fx=s, fy=s)
+            # print(img)
+            # img = torch.tensor(img).to('cuda') #TODO
+        # print(img.shape)
 
     if flip == 1:
         if rgb:
