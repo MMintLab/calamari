@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 import cv2
 
-from language4contact.modules_shared import *
+# from language4contact.modules_shared import *
 from .resnet import ResNet, ResidualBlock
 from .Transformer_MM_Explainability.CLIP.clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 from .Transformer_MM_Explainability.CLIP import clip 
