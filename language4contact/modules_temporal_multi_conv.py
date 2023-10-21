@@ -10,15 +10,15 @@ from language4contact.modules_shared import *
 from language4contact.temporal_transformer import TemporalTransformer, PrenormPixelLangEncoder
 import language4contact.utils as utils
 from typing import Any, Callable, List, Optional, Type, Union
-from language4contact.config.config_multi import Config
+from language4contact.config.config_multi_conv import Config
 from language4contact.unet import UNet_Decoder
 
 class policy(nn.Module):
-    def __init__(self,  dim_in, dim_out, image_size = 255, Config:Config =None):
+    def __init__(self,  dim_in, dim_out, image_size = 255, Config:Config =None, device = None):
         super(policy, self).__init__()
         self.Config = Config
         self.dim_ft = Config.dim_ft
-        self.device = Config.device
+        self.device = device
         self.B = None # Batch size.
         self.L = self.Config.contact_seq_l # Sequence Length.
 
@@ -45,7 +45,7 @@ class policy(nn.Module):
 
 
         self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=2, dropout_rate=0.1, mha_dropout_rate=0.0,
-          dff=Config.dim_emb, device= self.Config.device)
+          dff=Config.dim_emb, device= self.device)
         self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float)
 
 
@@ -96,16 +96,15 @@ class policy(nn.Module):
 
         # out = self.vl_transformer_encoder(visual_sentence, fused_x, padding_mask = vl_mask_) # L x (B * l_contact_seq) X ft
         # out = torch.mean(out, axis = 1) # TODO: remove?
-        out = torch.zeros((self.B * self.L, key.shape[-1])).to(self.Config.device)
-        # print(fused_x)
-        # breakpoint()
-        out[~vl_mask[:,0]] = torch.mean(self.vl_transformer_encoder(key=key, query=query, padding_mask = vl_mask_), axis = 1)
+        out = torch.zeros((self.B * self.L, key.shape[-1])).to(self.device)
+        vl_transformer_output = self.vl_transformer_encoder(key=key, query=query, padding_mask = vl_mask_)
+        out[~vl_mask[:,0]] = torch.mean(vl_transformer_output, axis = 1)
         out = out.reshape((self.B , self.L, key.shape[-1]))
         # print("out", out[0])
         # breakpoint()
 
         tp_mask_tmp= tp_mask.unsqueeze(2).repeat((1, 1, out.shape[-1])) # 1 padding
-        out = torch.where(tp_mask_tmp, torch.zeros_like(out).to(self.Config.device),  out)
+        out = torch.where(tp_mask_tmp, torch.zeros_like(out).to(self.device),  out)
 
         # tp_output = self.tp_transformer(out, padding_mask = tp_mask, type = 'stack')
         tp_output = self.tp_transformer(out, padding_mask = tp_mask)

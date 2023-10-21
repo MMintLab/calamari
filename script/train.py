@@ -3,10 +3,19 @@ from datetime import datetime
 import time
 from tqdm import tqdm
 import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2, 3"
 
 from language4contact.utils import *
+
+parser = ArgumentParser()
+parser.add_argument("--gpu_id", type=str, default=0, help="used gpu")
+parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
+parser.add_argument("--from_log", type=str, default='', help= "log to the previous path")
+
+
+args = parser.parse_args()
+torch.cuda.set_device(f"cuda:{args.gpu_id}")
+
+
 from language4contact.modules_temporal_multi_conv import  policy
 from language4contact.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
@@ -14,31 +23,6 @@ from language4contact.modules_shared import *
 
 from language4contact.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
 import tensorflow as tf
-from cliport.cliport.agents import TwoStreamClipLingUNetLatTransporterAgent
-import numpy as np
-
-from cliport.utils import utils
-from cliport.models.streams.two_stream_attention_lang_fusion import TwoStreamAttentionLangFusionLat
-from cliport.models.streams.two_stream_transport_lang_fusion import TwoStreamTransportLangFusionLat
-
-
-parser = ArgumentParser()
-parser.add_argument("--gpu_id", type=str, default=[0,1], help="used gpu")
-parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
-parser.add_argument("--from_log", type=str, default='', help= "log to the previous path")
-
-
-args = parser.parse_args()
-# TXT  = "Use the sponge to clean up the dirt."
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,3"
-
-# device = torch.device("cuda:0,2" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
-
-torch.cuda.set_device(f"cuda:{args.gpu_id}")
-# torch.cuda.set_device(f"cuda:2")
-
-# torch.cuda.set_device(args.gpu_id)
-
 
 
 class ContactEnergy():
@@ -49,6 +33,11 @@ class ContactEnergy():
 
 
         self.activation = {}
+        ## Image Encoder
+        # self.image_encoder = image_encoder(self.Config.device, dim_in = 1 , dim_out = int(self.Config.dim_emb))
+        self.image_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+        self.image_encoder.to(self.Config.device).eval()
+        self.image_encoder.avgpool.register_forward_hook(self.get_activation('avgpool'))
 
 
         ## Data-loader
@@ -61,28 +50,19 @@ class ContactEnergy():
 
         self.test_dataLoader = DataLoader(dataset=self.test_dataset,
                          batch_size=self.Config.B, shuffle=False, drop_last=False)
-        
 
-        stream_one_fcn = 'plain_resnet_lat'
-        stream_two_fcn = 'clip_lingunet_lat'
-
-        self.transport = TwoStreamTransportLangFusionLat(
-            stream_fcn=(stream_one_fcn, stream_two_fcn),
-            in_shape= (256, 256, 6), # TODO
-            n_rotations= 36,
-            crop_size= 64, # TODO
-            preprocess=utils.preprocess, # TODO
-            cfg=self.cliport_cfg, # TODO
-            device=self.device,
-        )
-
-
-
+        # print("Train dataset size", self.train_dataset.__len__(), "Test dataset size", self.test_dataset.__len__())
 
 
         ## Define policy model
         dimout = self.train_dataset.cnt_w * self.train_dataset.cnt_h
 
+        self.policy = policy(dim_in = self.train_dataset.cnt_w, 
+                             dim_out= dimout, 
+                             image_size = self.train_dataset.cnt_w, 
+                             Config=self.Config,
+                             device = 'cuda')
+        # self.policy = nn.DataParallel(self.policy.to(self.Config.device),device_ids=[0])
 
         ## Set optimizer
         self.test = False if test_idx is None else True
@@ -128,7 +108,7 @@ class ContactEnergy():
             l = data["idx"]
             rgb = list(zip(*data['traj_rgb_paths']))
             traj_cnt_lst = list(zip(*data['traj_cnt_paths'])) #([B, input_length, img_w, img_h])\
-            traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0)
+            traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0).to(self.Config.device)
             txt = list(data['txt'])
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
@@ -139,22 +119,24 @@ class ContactEnergy():
 
 
             # inp, txt_emb, vl_mask, tp_mask
-            visual_sentence = data["visual_sentence"].flatten(0,1)
-            fused_x = data["fused_x"].flatten(0,1)
+            query = data["query"].flatten(0,1)
+            key = data["key"].flatten(0,1)
             vl_mask = data["vl_mask"].flatten(0,1)
             tp_mask = data["tp_mask"]
             # visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks, flip = flip)
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
 
-            
-            contact_seq = self.policy.module.forward_lava(visual_sentence, fused_x, vl_mask = vl_mask, tp_mask = tp_mask)
+            # print(key, query, vl_mask, tp_mask)
+            # breakpoint()
+
+            contact_seq = self.policy.module.forward_lava(key=key, query=query, vl_mask = vl_mask, tp_mask = tp_mask)
             # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
 
             # loss
-            loss0_i = torch.norm( traj_cnt_img.to(self.Config.device) - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
+            loss0_i = torch.norm( traj_cnt_img - contact_seq, p =2) / ( 150 **2 * self.train_dataset.contact_seq_l )
             # print(loss0_i,  torch.norm(traj_cnt_img.to(self.Config.device)), torch.norm(contact_seq.to(self.Config.device)))
             loss0_i = 1e5 * loss0_i
             
@@ -178,10 +160,10 @@ class ContactEnergy():
                     l_i = l[l_ir] # Batch index -> real idx
                     if l_i < N: 
                         # print(l_i, rgb_i_)
-                        # contact_seq_round = round_mask(traj_cnt_img[l_ir])
+                        # contact_seq_round = round_mask(traj_cnt_img[l_ir]).detach().cpu()
                         contact_seq_round = round_mask(contact_seq[l_ir].detach().cpu())
                         contact_histories[l_i] = contact_seq_round
-                        contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir])
+                        contact_histories_ovl[l_i] = self.overlay_cnt_rgb(rgb_i_, contact_seq_round, aug_idx[l_ir].numpy())
                         # l_i_hist.append(l_i)
                     # l_ir += 1
             # print("4:", time.time()-t)
@@ -209,7 +191,7 @@ class ContactEnergy():
             if i % 20 == 0 or i == self.Config.epoch -1: 
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, 
                                                                                       write = True,
-                                                                                        N = np.amin([60, self.train_dataset.__len__()]),
+                                                                                        N = np.amin([600, self.train_dataset.__len__()]),
                                                                                         mode = 'train')
                 self.write_tensorboard(i, contact_histories, contact_histories_ovl, tot_loss)
             else:
@@ -226,9 +208,8 @@ class ContactEnergy():
                                                                                       mode = 'test')
                 self.write_tensorboard_test(i, contact_histories, contact_histories_ovl, tot_loss)
 
-
     def save_model(self, epoch):
-        if epoch % 1000 == 0:
+        if epoch % 100 == 0:
             path_model = self.logdir + f"/policy_{epoch}.pth"
             path_optim = self.logdir + f"/optim_{epoch}.pth"
         else: 
@@ -238,7 +219,7 @@ class ContactEnergy():
         #     os.makedirs(path)
         torch.save({"epoch": epoch,
             "path" : self.logdir ,
-            "param" : self.policy.module.state_dict(),
+            "param" : self.policy.state_dict(),
             }, path_model)
         torch.save({"epoch": epoch,
                     "optim" : self.optim.state_dict()
@@ -267,11 +248,11 @@ class ContactEnergy():
         # get the file directory.
         filename = os.path.realpath(__file__).split('/')[-1]
         save_script(f'script/{filename}', logdir)
-        save_script('language4contact/config/config_multi.py', logdir)
-        save_script('language4contact/config/task_policy_configs.py', logdir)
-        save_script('language4contact/modules_temporal_multi.py', logdir)
-        save_script('language4contact/modules_temporal.py', logdir)
-        save_script('language4contact/temporal_transformer.py', logdir)
+        # save_script('language4contact/config/config_multi.py', logdir)
+        # save_script('language4contact/config/task_policy_configs.py', logdir)
+        # save_script('language4contact/modules_temporal_multi.py', logdir)
+        # save_script('language4contact/modules_temporal.py', logdir)
+        # save_script('language4contact/temporal_transformer.py', logdir)
 
 
 
@@ -314,7 +295,8 @@ class ContactEnergy():
         # torch.flip(rgb, (-2,))
 
         # print(rgb, cnt_pred)
-        cnt_pred = torch.tensor(cnt_pred) * 255
+        # cnt_pred = torch.tensor(cnt_pred) * 255
+        cnt_pred = cnt_pred * 255
         cnt_pred = cnt_pred.to(torch.uint8)
         iidx, jidx = torch.where( cnt_pred != 0)
         rgb[iidx, jidx,0] = cnt_pred[iidx, jidx] #* 255.
@@ -324,5 +306,7 @@ class ContactEnergy():
         return rgb
 
 # CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-CE = ContactEnergy( log_path = 'sweep_0622')
+# CE = ContactEnergy( log_path = 'wipe_scale_1003')
+CE = ContactEnergy( log_path = 'test')
+
 CE.get_energy_field()

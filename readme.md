@@ -1,9 +1,12 @@
 
+We tested this code on Ubutu 20 with GPU A6000, RTX 3080, and RTX 2070.
+
 ## Dependencies
 ```angular2html
-conda create -n lcc python=3.8
-conda activate lcc
+conda create -n calamari python=3.8
+conda activate calamari
 conda install pytorch==1.7.0 torchvision==0.8.0 torchaudio==0.7.0 cudatoolkit=11.0 -c pytorch
+conda env create -f environment.yml
 
 ```
 ## Install project

@@ -385,7 +385,7 @@ class DatasetTemporal(torch.utils.data.Dataset):
         txt = self.data_summary[idx]["txt"]
         task = self.data_summary[idx]["task"]
 
-
+        print(self.Config.device)
         return   {
                 "query": self.aug_summary[idx_raw]['query'].to(self.Config.device),
                 "key" : self.aug_summary[idx_raw]['key'].to(self.Config.device),

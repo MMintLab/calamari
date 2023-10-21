@@ -34,9 +34,9 @@ class TaskConfig():
             "txt_cmd": self.language_prompts["wipe"][0],
             "tool_name": 'sponge',
             'target_name':'diningTable',
-            "train_idx": np.arange(0, 100),
+            "train_idx": np.arange(0, 10),
             # "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
-            "test_idx": np.arange(100, 120),
+            "test_idx": np.arange(10, 20),
             "heatmap_folder": "heatmap_huy_mask_by_sentence/"
         },
             # "sweep": {
