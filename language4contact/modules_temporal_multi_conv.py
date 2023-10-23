@@ -46,14 +46,14 @@ class policy(nn.Module):
 
         self.vl_transformer_encoder = PrenormPixelLangEncoder(num_layers=2,num_heads=2, dropout_rate=0.1, mha_dropout_rate=0.0,
           dff=Config.dim_emb, device= self.device)
-        self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float)
+        self.vl_transformer_encoder = self.vl_transformer_encoder.to(torch.float).to(self.device)
 
 
         # self.transformer_decoder = contact_mlp_decoder(self.dim_ft, dim_out = dim_out).to(self.device)
-        self.transformer_decoder = UNet_Decoder()
+        self.transformer_decoder = UNet_Decoder().to(torch.float).to(self.device)
 
         # temporal transformer.
-        self.tp_transformer = TemporalTransformer(dim_in=Config.dim_emb, d_model = Config.dim_emb, sequence_length = self.L, device= self.device)
+        self.tp_transformer = TemporalTransformer(dim_in=Config.dim_emb, d_model = Config.dim_emb, sequence_length = self.L, device= self.device).to(torch.float).to(self.device)
         # self.model_grd = [self._image_encoder, self.vl_transformer_encoder,  self.transformer_decoder, self.tp_transformer]
 
     #     self.text_embs = self._get_text_emb()
@@ -110,7 +110,7 @@ class policy(nn.Module):
         tp_output = self.tp_transformer(out, padding_mask = tp_mask)
         # print("tp_output", tp_output[0])
 
-        tp_output = tp_output.unsqueeze(2).unsqueeze(3)
+        tp_output = tp_output.unsqueeze(2).unsqueeze(3).to(torch.float)
 
         contact = self.transformer_decoder(tp_output) # (B * seq_l) X w x h
         # print("tp_output", contact[0])

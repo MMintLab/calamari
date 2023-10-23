@@ -19,8 +19,7 @@ import io
 
 relu = torch.nn.ReLU()
 
-
-from language4contact.utils import *
+# from language4contact.utils import *
 
 def draw_line(start, end):
 

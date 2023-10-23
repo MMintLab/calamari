@@ -3,9 +3,7 @@ from datetime import datetime
 import time
 from tqdm import tqdm
 import os
-
-from language4contact.utils import *
-
+import torch
 parser = ArgumentParser()
 parser.add_argument("--gpu_id", type=str, default=0, help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
@@ -15,7 +13,7 @@ parser.add_argument("--from_log", type=str, default='', help= "log to the previo
 args = parser.parse_args()
 torch.cuda.set_device(f"cuda:{args.gpu_id}")
 
-
+from language4contact.utils import *
 from language4contact.modules_temporal_multi_conv import  policy
 from language4contact.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
@@ -24,7 +22,7 @@ from language4contact.modules_shared import *
 from language4contact.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
 import tensorflow as tf
 
-
+os.environ["CUDA_VISIBLE_DEVICES"] = str(0)
 class ContactEnergy():
     def __init__(self, log_path, test_idx = (30, 37)):
         self.Config = Config()
@@ -38,13 +36,16 @@ class ContactEnergy():
         self.image_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
         self.image_encoder.to(self.Config.device).eval()
         self.image_encoder.avgpool.register_forward_hook(self.get_activation('avgpool'))
+        self.device = 'cuda'
 
 
         ## Data-loader
         self.train_dataset = Dataset(self.Config, mode = "train", image_encoder = {"model": self.image_encoder,
-                                                                                   "activation": self.activation})
+                                                                                   "activation": self.activation},
+                                                                                   device = self.device)
         self.test_dataset = Dataset(self.Config, mode = "test", image_encoder = {"model": self.image_encoder,
-                                                                                   "activation": self.activation})
+                                                                                   "activation": self.activation},
+                                                                                   device = self.device)
         self.train_dataLoader = DataLoader(dataset= self.train_dataset,
                          batch_size=self.Config.B, shuffle=True, drop_last=False)
 
@@ -61,7 +62,7 @@ class ContactEnergy():
                              dim_out= dimout, 
                              image_size = self.train_dataset.cnt_w, 
                              Config=self.Config,
-                             device = 'cuda')
+                             device = self.device)
         # self.policy = nn.DataParallel(self.policy.to(self.Config.device),device_ids=[0])
 
         ## Set optimizer
@@ -78,7 +79,7 @@ class ContactEnergy():
             pretrained = torch.load(os.path.join(args.from_log, "policy.pth"), map_location=torch.device('cpu'))
             pretrained_optim = torch.load(os.path.join(args.from_log, "optim.pth"), map_location=torch.device('cpu'))
 
-            self.policy.module.load_state_dict(pretrained["param"])
+            self.policy.load_state_dict(pretrained["param"])
             self.start_epoch = pretrained["epoch"]
             self.log_path  = pretrained["path"]
             self.optim.load_state_dict(pretrained_optim["optim"])
@@ -130,7 +131,7 @@ class ContactEnergy():
             # print(key, query, vl_mask, tp_mask)
             # breakpoint()
 
-            contact_seq = self.policy.module.forward_lava(key=key, query=query, vl_mask = vl_mask, tp_mask = tp_mask)
+            contact_seq = self.policy.forward_lava(key=key, query=query, vl_mask = vl_mask, tp_mask = tp_mask)
             # print("2:",time.time()-t)
             t = time.time()
             # contact_seq = self.policy(feat, seg_idx, padding_mask = padding_mask.to(self.Config.device))
@@ -187,7 +188,7 @@ class ContactEnergy():
             # print("model saved:", time.time()-t)
             t = time.time()
 
-            self.policy.module.train(True)
+            self.policy.train(True)
             if i % 20 == 0 or i == self.Config.epoch -1: 
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.train_dataLoader, 
                                                                                       write = True,

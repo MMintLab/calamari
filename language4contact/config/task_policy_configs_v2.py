@@ -27,18 +27,18 @@ class TaskConfig():
         #     "test_idx": np.arange(100, 110),
         #     "heatmap_folder": "heatmap_huy_mask/"
         # },
-            "wipe": {
-            # "data_dir": "dataset/heuristics_0228",
-            "data_dir": "dataset/wipe_0603_2",
-            "contact_folder": 'contact_front',
-            "txt_cmd": self.language_prompts["wipe"][0],
-            "tool_name": 'sponge',
-            'target_name':'diningTable',
-            "train_idx": np.arange(0, 10),
-            # "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
-            "test_idx": np.arange(10, 20),
-            "heatmap_folder": "heatmap_huy_mask_by_sentence/"
-        },
+        #     "wipe": {
+        #     # "data_dir": "dataset/heuristics_0228",
+        #     "data_dir": "dataset/wipe_0603_2",
+        #     "contact_folder": 'contact_front',
+        #     "txt_cmd": self.language_prompts["wipe"][0],
+        #     "tool_name": 'sponge',
+        #     'target_name':'diningTable',
+        #     "train_idx": np.arange(0, 10),
+        #     # "train_idx": np.concatenate([np.arange(0,45), np.arange(50,105)]),
+        #     "test_idx": np.arange(10, 20),
+        #     "heatmap_folder": "heatmap_huy_mask_by_sentence/"
+        # },
             # "sweep": {
             #     "data_dir": "dataset/sweep_to_dustpan1/episodes",
             #     "contact_folder": 'contact_front',
@@ -51,19 +51,19 @@ class TaskConfig():
             #     "heatmap_folder": "heatmap_huy_mask_by_sentence/"
             #     # "heatmap_folder": "heatmap_huy_mask_filter/"
             # },
-            # "push": {
-            #     "data_dir": "dataset/push_0515",
-            #     "contact_folder": 'contact_front',
-            #     "txt_cmd": self.language_prompts["press"][0],
-            #     "tool_name": 'Panda_leftfinger_respondable',
-            #     'target_name': 'target_button_topPlate0',
-            #     "train_idx": np.arange(0, 100),
-            #     # "train_idx": np.concatenate([np.arange(0,95), np.arange(95,105)]),
-            #     "test_idx": np.arange(100, 120), #
-            #     "heatmap_folder": "heatmap_huy_mask_by_sentence/",
-            #     # "heatmap_folder": "heatmap_huy_mask/"
-            #     # "heatmap_folder": "heatmap_huy_center_/"
-            # },
+            "push": {
+                "data_dir": "dataset/push_0515",
+                "contact_folder": 'contact_front',
+                "txt_cmd": self.language_prompts["press"][0],
+                "tool_name": 'Panda_leftfinger_respondable',
+                'target_name': 'target_button_topPlate0',
+                "train_idx": np.arange(0, 10),
+                # "train_idx": np.concatenate([np.arange(0,95), np.arange(95,105)]),
+                "test_idx": np.arange(110, 120), #
+                "heatmap_folder": "heatmap_huy_mask_by_sentence/",
+                # "heatmap_folder": "heatmap_huy_mask/"
+                # "heatmap_folder": "heatmap_huy_center_/"
+            },
             # "scoop": {"data_dir": "dataset/scoop_0518",
             #           "contact_folder": 'contact_front',
             #           "txt_cmd": self.language_prompts["scoop"][0],

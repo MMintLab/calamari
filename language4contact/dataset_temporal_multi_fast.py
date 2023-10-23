@@ -14,12 +14,13 @@ from tqdm import tqdm
 
 
 class DatasetTemporal(torch.utils.data.Dataset):
-    def __init__(self, Config, mode = 'train', seq_l = -1, image_encoder = None):
+    def __init__(self, Config, mode = 'train', seq_l = -1, image_encoder = None, device = None):
         self.Config = Config
         self.contact_seq_l = self.Config.contact_seq_l
         self.mode = mode 
         self.return_seq_l = seq_l
         self.N_noise_aug = 5
+        self.device = device
         # get language embeddings
         if mode == 'train':
             self.idx_lst = [[0, -1, -1], [0, -1, 0], [0, -1, 1],
@@ -385,7 +386,6 @@ class DatasetTemporal(torch.utils.data.Dataset):
         txt = self.data_summary[idx]["txt"]
         task = self.data_summary[idx]["task"]
 
-        print(self.Config.device)
         return   {
                 "query": self.aug_summary[idx_raw]['query'].to(self.Config.device),
                 "key" : self.aug_summary[idx_raw]['key'].to(self.Config.device),
