@@ -10,3 +10,4 @@ language4contact.egg-info/
 *.__pycache__
 /__pycache__/
 language4contact/Transformer_MM_Explainability
+*.pyc

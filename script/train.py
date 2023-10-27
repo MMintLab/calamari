@@ -9,11 +9,12 @@ parser.add_argument("--gpu_id", type=str, default=0, help="used gpu")
 parser.add_argument("--test_idx", type=tuple, default=(30, 37), help="index of test dataset")
 parser.add_argument("--from_log", type=str, default='', help= "log to the previous path")
 
-
 args = parser.parse_args()
-torch.cuda.set_device(f"cuda:{args.gpu_id}")
+os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
+# torch.cuda.set_device(f"cuda:{args.gpu_id}")
+# torch.cuda.set_device(int(args.gpu_id))
 
-from language4contact.utils import *
+from language4contact.utils import save_script, round_mask
 from language4contact.modules_temporal_multi_conv import  policy
 from language4contact.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
@@ -22,7 +23,8 @@ from language4contact.modules_shared import *
 from language4contact.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
 import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = str(0)
+
+
 class ContactEnergy():
     def __init__(self, log_path, test_idx = (30, 37)):
         self.Config = Config()
@@ -109,7 +111,7 @@ class ContactEnergy():
             l = data["idx"]
             rgb = list(zip(*data['traj_rgb_paths']))
             traj_cnt_lst = list(zip(*data['traj_cnt_paths'])) #([B, input_length, img_w, img_h])\
-            traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0).to(self.Config.device)
+            traj_cnt_img = torch.cat(data['traj_cnt_img'], dim = 0).to(self.device)
             txt = list(data['txt'])
             tasks = list(data["task"])
             aug_idx = data["aug_idx"] # B,
@@ -127,8 +129,6 @@ class ContactEnergy():
             # visual_sentence, fused_x, vl_mask, tp_mask =  self.policy.module.input_processing(rgb, txt, tasks, flip = flip)
             # fused_x = torch.flatten(fused_x, 0, 1)
             # print(visual_sentence.shape, fused_x.shape, vl_mask.shape, tp_mask.shape )
-
-            # print(key, query, vl_mask, tp_mask)
             # breakpoint()
 
             contact_seq = self.policy.forward_lava(key=key, query=query, vl_mask = vl_mask, tp_mask = tp_mask)
@@ -202,7 +202,7 @@ class ContactEnergy():
             tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
 
             if i % 20 == 0 or i == self.Config.epoch -1: 
-                self.policy.module.train(False)
+                self.policy.train(False)
                 contact_histories, contact_histories_ovl, tot_loss = self.feedforward(self.test_dataLoader, 
                                                                                       write = True, 
                                                                                       N = self.test_dataset.__len__(),
@@ -306,8 +306,7 @@ class ContactEnergy():
 
         return rgb
 
-# CE = ContactEnergy( log_path = 'multi_conv_aug_rep_push_bce')
-# CE = ContactEnergy( log_path = 'wipe_scale_1003')
+
 CE = ContactEnergy( log_path = 'test')
 
 CE.get_energy_field()
