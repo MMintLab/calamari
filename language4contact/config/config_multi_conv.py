@@ -37,14 +37,13 @@ class Config:
         self.table_h = 0.5 #496
 
         # Data dir 
-        # TODO: Update dataset_temporal to use the data config dictionary 
         self.contact_seq_l = 4
         self.max_sentence_l = 16
         self.task_confg = TaskConfig()
         self.dataset_config = self.task_confg.task_policy_configs
 
-        self.heatmap_size = (256, 256) #224,224) # Resize the heatmap by this size
-        self.heatmap_type = 'huy' # 'chefer'
+        self.heatmap_size = (256, 256) 
+        self.heatmap_type = 'huy'
         self.contact_folder = 'contact_front'
         self.contact_seq_l = 4
         self.aug_num = 20

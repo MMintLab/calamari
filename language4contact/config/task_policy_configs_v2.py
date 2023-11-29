@@ -3,17 +3,10 @@ import numpy as np
 class TaskConfig():
     def __init__(self):
         # TODO : add variations of the language prompts
-        self.language_prompts = {"wipe": [
-                                        "wipe the dots up",
-                                        "wipe the dirt up",
-                                          "use the sponge to clean up the dirt",
-                                          "Use the eraser to clean up the dirt."],
-                                    "sweep": [
-                                              "sweep dirt to dustpan",
-                                              "Use the broom to brush the dirt into the dustpan.",],
+        self.language_prompts = {"wipe": ["wipe the dots up"],
+                                    "sweep": ["sweep dirt to dustpan"],
                                     "scoop": ["scoop up the cube and lift it with the spatula"],
-                                    "press": ["push the red button"],
-                                    "draw": ["draw the letter C"]} # should be push!!!
+                                    "press": ["push the red button"]} 
 
 
         self.task_policy_configs = {
