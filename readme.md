@@ -18,17 +18,13 @@ git submodule add -f git@github.com:yswi/semantic-abstraction.git calamari/seman
 pip install -e .
 ```
 
-## Clone Package
 
-
-
-
-## Generetate Heatmap for training
+## 3. Generetate Dataset before training
 ```
- python script/dataprocessing/generate_heatmap_chefer.py
+ python script/dataprocessing/generate_heatmap.py
 ```
 
-## Train
+## 4. Train Policy
 ```
 # temporal transformer
 python script/train_temporal.py --gpu_id 0
