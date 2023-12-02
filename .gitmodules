@@ -1,6 +1,3 @@
-[submodule "language4contact/Transformer_MM_Explainability"]
-	path = language4contact/Transformer_MM_Explainability
-	url = https://github.com/hila-chefer/Transformer-MM-Explainability.git
 [submodule "language4contact/semantic-abstraction"]
 	path = language4contact/semantic-abstraction
 	url = https://github.com/columbia-ai-robotics/semantic-abstraction.git

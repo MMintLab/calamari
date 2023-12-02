@@ -1,9 +1,9 @@
 import setuptools
 
 setuptools.setup(
-    name="language4contact",
+    name="calamari",
     version="0.0.1",
-    packages=["language4contact"],
+    packages=["calamari"],
     url="",
     description="language guided compliant tool manipulation",
     install_requires=[]  

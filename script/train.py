@@ -11,16 +11,14 @@ parser.add_argument("--from_log", type=str, default='', help= "log to the previo
 
 args = parser.parse_args()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
-# torch.cuda.set_device(f"cuda:{args.gpu_id}")
-# torch.cuda.set_device(int(args.gpu_id))
 
-from language4contact.utils import save_script, round_mask
-from language4contact.modules_temporal_multi_conv import  policy
-from language4contact.config.config_multi_conv import Config
+from calamari.utils import save_script, round_mask
+from calamari.modules_temporal_multi_conv import  policy
+from calamari.config.config_multi_conv import Config
 from torch.utils.data import DataLoader
-from language4contact.modules_shared import *
+from calamari.modules_shared import *
 
-from language4contact.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
+from calamari.dataset_temporal_multi_fast import DatasetTemporal as Dataset, augmentation
 import tensorflow as tf
 
 
@@ -249,12 +247,6 @@ class ContactEnergy():
         # get the file directory.
         filename = os.path.realpath(__file__).split('/')[-1]
         save_script(f'script/{filename}', logdir)
-        # save_script('language4contact/config/config_multi.py', logdir)
-        # save_script('language4contact/config/task_policy_configs.py', logdir)
-        # save_script('language4contact/modules_temporal_multi.py', logdir)
-        # save_script('language4contact/modules_temporal.py', logdir)
-        # save_script('language4contact/temporal_transformer.py', logdir)
-
 
 
 
@@ -293,10 +285,7 @@ class ContactEnergy():
         rgb = torch.tensor(rgb)
         
         rgb = augmentation( aug_idx, rgb, rgb = True)
-        # torch.flip(rgb, (-2,))
 
-        # print(rgb, cnt_pred)
-        # cnt_pred = torch.tensor(cnt_pred) * 255
         cnt_pred = cnt_pred * 255
         cnt_pred = cnt_pred.to(torch.uint8)
         iidx, jidx = torch.where( cnt_pred != 0)

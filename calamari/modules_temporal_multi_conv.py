@@ -6,12 +6,12 @@ import numpy as np
 from PIL import Image
 
 from .Transformer_MM_Explainability.CLIP import clip 
-from language4contact.modules_shared import *
-from language4contact.temporal_transformer import TemporalTransformer, PrenormPixelLangEncoder
-import language4contact.utils as utils
+from calamari.modules_shared import *
+from calamari.temporal_transformer import TemporalTransformer, PrenormPixelLangEncoder
+import calamari.utils as utils
 from typing import Any, Callable, List, Optional, Type, Union
-from language4contact.config.config_multi_conv import Config
-from language4contact.unet import UNet_Decoder
+from calamari.config.config_multi_conv import Config
+from calamari.unet import UNet_Decoder
 
 class policy(nn.Module):
     def __init__(self,  dim_in, dim_out, image_size = 255, Config:Config =None, device = None):

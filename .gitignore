@@ -3,11 +3,11 @@
 /.idea/
 */__pycache__/
 */Transformer_MM_Explainability/
-language4contact.egg-info/
+calamari.egg-info/
 *.png
 *.jpg
 *.pth
 *.__pycache__
 /__pycache__/
-language4contact/Transformer_MM_Explainability
+calamari/Transformer_MM_Explainability
 *.pyc

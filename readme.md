@@ -19,7 +19,7 @@ pip install -e .
 ```
 
 
-## 3. Prepare Dataset
+## 3. (optionally) Generate Heatmap
 ```
  python script/dataprocessing/generate_heatmap.py
 ```

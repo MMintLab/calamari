@@ -5,7 +5,7 @@ import math
 import torch
 import torch.utils.data as data_utils
 
-from language4contact.utils import *
+from calamari.utils import *
 
 class DatasetSeq_front_feedback(torch.utils.data.Dataset):
     def __init__(self, Config, mode = 'train', seq_l = -1):
