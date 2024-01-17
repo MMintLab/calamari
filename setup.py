@@ -6,7 +6,7 @@ setuptools.setup(
     packages=["calamari"],
     url="",
     description="language guided compliant tool manipulation",
-    install_requires=[]  
+    install_requires=[],
 )
 
 # bash -cl "/home/young/miniconda3/envs/lcc/bin/python setup.py install"

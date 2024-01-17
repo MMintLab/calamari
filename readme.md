@@ -19,13 +19,15 @@ pip install -e .
 ```
 
 
-## 3. (optionally) Generate Heatmap
-```
- python script/dataprocessing/generate_heatmap.py
-```
-
 ## 4. Train Policy
 ```
 # temporal transformer
 python script/train_temporal.py --gpu_id 0
+```
+
+
+## (optionally) Train with Custom data. 
+Generate heatmap of the RLBench example.
+```
+ python script/dataprocessing/generate_heatmap.py --tas <TASK>
 ```

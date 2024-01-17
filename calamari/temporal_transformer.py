@@ -17,9 +17,19 @@ https://github.com/google-research/language-table/blob/770dade55237f31b7028dbff4
   d_model: int = 128
   num_heads: int = 2
 """
-class PrenormPixelLangEncoder(nn.Module): 
-    def __init__(self, num_layers: int = 2, num_heads: int=2, dropout_rate: float = 0.1,
-                 dff: int =128, mha_dropout_rate: float = 0.0, device: int = 'cpu', sequence_length: int = 16):
+
+
+class PrenormPixelLangEncoder(nn.Module):
+    def __init__(
+        self,
+        num_layers: int = 2,
+        num_heads: int = 2,
+        dropout_rate: float = 0.1,
+        dff: int = 128,
+        mha_dropout_rate: float = 0.0,
+        device: int = "cpu",
+        sequence_length: int = 16,
+    ):
         super(PrenormPixelLangEncoder, self).__init__()
         self.device = device
         self.num_layers = num_layers
@@ -27,13 +37,19 @@ class PrenormPixelLangEncoder(nn.Module):
         self.dff = dff
         self.dropout_rate = dropout_rate
         self.mha_dropout_rate = mha_dropout_rate
-        self.sequence_length = sequence_length # TODO update argument 
+        self.sequence_length = sequence_length  # TODO update argument
 
-        self.pixel_PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
-        self.lang_PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
+        self.pixel_PosEmb = Add1DPositionEmbedding(
+            max_len=self.sequence_length, device=self.device
+        )
+        self.lang_PosEmb = Add1DPositionEmbedding(
+            max_len=self.sequence_length, device=self.device
+        )
 
-        self.multiheadattention = nn.MultiheadAttention(embed_dim = self.dff, num_heads = self.num_heads, dropout=self.mha_dropout_rate)
-        self.Dropout = nn.Dropout(p = self.dropout_rate)
+        self.multiheadattention = nn.MultiheadAttention(
+            embed_dim=self.dff, num_heads=self.num_heads, dropout=self.mha_dropout_rate
+        )
+        self.Dropout = nn.Dropout(p=self.dropout_rate)
         self.LayerNorm1 = nn.LayerNorm([self.dff])
         self.LayerNorm2 = nn.LayerNorm([self.dff])
         self.LayerNorm3 = nn.LayerNorm([self.dff])
@@ -54,22 +70,23 @@ class PrenormPixelLangEncoder(nn.Module):
         lang_x = self.lang_PosEmb(query)
 
         for l in range(self.num_layers):
-            pixel_x_ = self.LayerNorm1(pixel_x).permute((1,0,2))
-            lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype)).permute((1,0,2))
+            pixel_x_ = self.LayerNorm1(pixel_x).permute((1, 0, 2))
+            lang_x_ = self.LayerNorm2(lang_x.to(pixel_x.dtype)).permute((1, 0, 2))
             # print(l, pixel_x_, lang_x_ )
             # breakpoint()
             # print(torch.sum(padding_mask, dim= -1), torch.sum(lang_x, dim = -1), torch.sum(pixel_x, dim = -1))
-            x2, _ = self.multiheadattention(query = lang_x_, 
-                                         key = pixel_x_, 
-                                         value = pixel_x_,
-                                         key_padding_mask = padding_mask)
-            
+            x2, _ = self.multiheadattention(
+                query=lang_x_,
+                key=pixel_x_,
+                value=pixel_x_,
+                key_padding_mask=padding_mask,
+            )
+
             # print(l, x2)
             # breakpoint()
 
-            x2 = x2.permute((1,0,2))
+            x2 = x2.permute((1, 0, 2))
             x2 = self.Dropout(x2)
-
 
             # Residual, only on the language path.
             x3 = lang_x + x2
@@ -82,7 +99,6 @@ class PrenormPixelLangEncoder(nn.Module):
             x5 = self.relu(x5)
             # print(l, x5)
 
-    
             x5 = self.l6(x5)
             x5 = self.Dropout(x5)
             lang_x = x5 + x3
@@ -90,10 +106,19 @@ class PrenormPixelLangEncoder(nn.Module):
         return lang_x
 
 
-
 class TemporalTransformer(nn.Module):
     """Transformer over time."""
-    def __init__(self, num_layers: int=2, d_model: int=128, num_heads: int=2, dff: int =128, sequence_length: int=4, dim_in: int = None, device: int = 'cpu'):
+
+    def __init__(
+        self,
+        num_layers: int = 2,
+        d_model: int = 128,
+        num_heads: int = 2,
+        dff: int = 128,
+        sequence_length: int = 4,
+        dim_in: int = None,
+        device: int = "cpu",
+    ):
         super(TemporalTransformer, self).__init__()
 
         self.num_layers = num_layers
@@ -110,18 +135,24 @@ class TemporalTransformer(nn.Module):
         nn.init.uniform_(self.l1.bias, 0, 0.05)
 
         # Followed the original config.
-        self.Dropout = nn.Dropout(p = 0.1)
-        self.PosEmb = Add1DPositionEmbedding(max_len=self.sequence_length, device=self.device)
+        self.Dropout = nn.Dropout(p=0.1)
+        self.PosEmb = Add1DPositionEmbedding(
+            max_len=self.sequence_length, device=self.device
+        )
         # print(self.PosEmb.requires_grad)
         # breakpoint()
-        self.PrenormEncoderLayer = nn.ModuleList([PrenormEncoderLayer(
-                                    num_heads=self.num_heads,
-                                    dropout_rate=0.1,
-                                    mha_dropout_rate=0.0,
-                                    dff=self.dff, 
-                                    dim_in=self.d_model,
-                                    ).to(self.device) for _ in range(self.num_layers)
-                                    ])
+        self.PrenormEncoderLayer = nn.ModuleList(
+            [
+                PrenormEncoderLayer(
+                    num_heads=self.num_heads,
+                    dropout_rate=0.1,
+                    mha_dropout_rate=0.0,
+                    dff=self.dff,
+                    dim_in=self.d_model,
+                ).to(self.device)
+                for _ in range(self.num_layers)
+            ]
+        )
         self.LayerNorm = nn.LayerNorm([self.d_model])
 
         # May or May not be used
@@ -129,23 +160,24 @@ class TemporalTransformer(nn.Module):
         nn.init.uniform_(self.l2.weight, 0, 0.05)
         nn.init.uniform_(self.l2.bias, 0, 0.05)
 
-
-    def forward(self, x, padding_mask, type = ''):
+    def forward(self, x, padding_mask, type=""):
         x = self.l1(x)
-        x *= np.sqrt(self.d_model) # L X B X ft
+        x *= np.sqrt(self.d_model)  # L X B X ft
 
         x = self.PosEmb(x)
         x = self.Dropout(x)
 
         for enc_i in self.PrenormEncoderLayer:
-            x = enc_i(x, padding_mask = padding_mask) # BxLxft - enc_i does permute inside their forward loop
+            x = enc_i(
+                x, padding_mask=padding_mask
+            )  # BxLxft - enc_i does permute inside their forward loop
 
-        if type == 'stack':
+        if type == "stack":
             x = torch.flatten(x, -2, -1)
             x = self.l2(x)
             return x
         else:
-            x = torch.mean(x, dim = 1)
+            x = torch.mean(x, dim=1)
             # x = torch.flatten(x, 1, 2)
 
             x = self.LayerNorm(x)
@@ -154,7 +186,15 @@ class TemporalTransformer(nn.Module):
 
 class PrenormEncoderLayer(nn.Module):
     """Prenorm MHA layer."""
-    def __init__(self, num_heads: int, dropout_rate: float, mha_dropout_rate: float, dff: int, dim_in: int):
+
+    def __init__(
+        self,
+        num_heads: int,
+        dropout_rate: float,
+        mha_dropout_rate: float,
+        dff: int,
+        dim_in: int,
+    ):
         super(PrenormEncoderLayer, self).__init__()
         self.num_heads = num_heads
         self.dropout_rate = dropout_rate
@@ -162,11 +202,15 @@ class PrenormEncoderLayer(nn.Module):
         self.dff = dff
         self.dim_in = dim_in
 
-        self.layernorm1 = nn.LayerNorm([self.dff]) # Need size 
-        self.layernorm2 = nn.LayerNorm([self.dff]) # Need size 
+        self.layernorm1 = nn.LayerNorm([self.dff])  # Need size
+        self.layernorm2 = nn.LayerNorm([self.dff])  # Need size
 
-        self.multiheadattention = nn.MultiheadAttention(embed_dim = self.dim_in, num_heads = self.num_heads, dropout=self.mha_dropout_rate)
-        self.dropout = nn.Dropout(p = self.dropout_rate)
+        self.multiheadattention = nn.MultiheadAttention(
+            embed_dim=self.dim_in,
+            num_heads=self.num_heads,
+            dropout=self.mha_dropout_rate,
+        )
+        self.dropout = nn.Dropout(p=self.dropout_rate)
 
         self.l1 = nn.Linear(self.dim_in, self.dff)
         self.relu = nn.ReLU()
@@ -178,7 +222,6 @@ class PrenormEncoderLayer(nn.Module):
 
         nn.init.uniform_(self.l2.weight, 0, 0.05)
         nn.init.uniform_(self.l2.bias, 0, 0.05)
-
 
     def forward(self, x, padding_mask):
         """
@@ -192,14 +235,16 @@ class PrenormEncoderLayer(nn.Module):
           If a ByteTensor is provided, the non-zero positions will be ignored while the position
           with the zero positions will be unchanged. If a BoolTensor is provided, the positions with the
           value of ``True`` will be ignored while the position with the value of ``False`` will be unchanged.
-        
+
         """
         x1 = self.layernorm1(x)
 
-        # pytorch transformer messed up with Batch order 
-        x1 = x1.permute((1,0,2))
-        x2, _ = self.multiheadattention(query = x1, key = x1, value = x1, key_padding_mask = padding_mask)
-        x2 = x2.permute((1,0,2))
+        # pytorch transformer messed up with Batch order
+        x1 = x1.permute((1, 0, 2))
+        x2, _ = self.multiheadattention(
+            query=x1, key=x1, value=x1, key_padding_mask=padding_mask
+        )
+        x2 = x2.permute((1, 0, 2))
 
         x2 = self.dropout(x2)
 
@@ -224,14 +269,21 @@ class Add1DPositionEmbedding(nn.Module):
     posemb_init: Positional embedding initializer.
     param_name: The name of the parameter that stores the positional embedding.
     """
-    def __init__(self, rescale_from: Optional[Sequence[int]] = None, max_len: Optional[int] = None, param_name: str = "pos_embedding", device: str ='cpu'):
+
+    def __init__(
+        self,
+        rescale_from: Optional[Sequence[int]] = None,
+        max_len: Optional[int] = None,
+        param_name: str = "pos_embedding",
+        device: str = "cpu",
+    ):
         super(Add1DPositionEmbedding, self).__init__()
 
         self.rescale_from = rescale_from
         self.max_len = max_len
         self.param_name = param_name
         self.device = device
-    
+
     def forward(self, inputs):
         """Applies Add1DPositionEmbedding module.
         Args:
@@ -239,8 +291,9 @@ class Add1DPositionEmbedding(nn.Module):
         Returns:
             Output: `(bs, timesteps, in_dim)`.
         """
-        assert inputs.ndim == 3, ("Number of dimensions should be 3,"
-                                    " but it is: %d" % inputs.ndim)
+        assert inputs.ndim == 3, (
+            "Number of dimensions should be 3," " but it is: %d" % inputs.ndim
+        )
         length = inputs.shape[1]
         max_len = self.max_len or length
         embedding_length = max_len
@@ -250,13 +303,14 @@ class Add1DPositionEmbedding(nn.Module):
 
         pos_emb_shape = (1, embedding_length, inputs.shape[-1])
         # Use a fixed (non-learned) sinusoidal position embedding.
-        pos_embedding = sinusoidal_init(max_len=embedding_length)(None,
-                                                                    pos_emb_shape,
-                                                                    None)
+        pos_embedding = sinusoidal_init(max_len=embedding_length)(
+            None, pos_emb_shape, None
+        )
         pe = pos_embedding[:, :length, :]
         return inputs + pe.to(self.device)
 
-def sinusoidal_init(max_len, max_timescale = 1.0e4):
+
+def sinusoidal_init(max_len, max_timescale=1.0e4):
     """1D Sinusoidal Position Embedding Initializer.
     Args:
         max_len: maximum possible length for the input.
@@ -264,7 +318,8 @@ def sinusoidal_init(max_len, max_timescale = 1.0e4):
     Returns:
         output: init function returning `(1, max_len, d_feature)`
     """
-    def init(key, shape, dtype = torch.float32):
+
+    def init(key, shape, dtype=torch.float32):
         """Sinusoidal init.
         The defined API by JAX for a custom initializer is:
             `def init(key, shape, dtype)`
@@ -283,9 +338,11 @@ def sinusoidal_init(max_len, max_timescale = 1.0e4):
         pos_emb = np.zeros((max_len, d_feature), dtype=np.float32)
         position = np.arange(0, max_len)[:, np.newaxis]
         div_term = np.exp(
-            np.arange(0, d_feature, 2) * -(np.log(max_timescale) / d_feature))
+            np.arange(0, d_feature, 2) * -(np.log(max_timescale) / d_feature)
+        )
         pos_emb[:, 0::2] = np.sin(position * div_term)
         pos_emb[:, 1::2] = np.cos(position * div_term)
         pe = pos_emb[np.newaxis, :, :]  # [1, max_len, d_feature]
         return torch.tensor(pe)
+
     return init
