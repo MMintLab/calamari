@@ -8,6 +8,8 @@ from calamari.semantic_abstraction.CLIP.clip import ClipWrapper, saliency_config
 import typer
 app = typer.Typer()
 
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
 
 """
 We extend our gratitude to Huy Ha et al. (https://github.com/real-stanford/semantic-abstraction) for their outstanding CLIP heatmap extraction model. 
@@ -22,6 +24,8 @@ near = 0.009999999776
 far = 4.5
 vmin = 0.000
 vmax = 0.050
+# get_clip_saliency_ = torch.compile(ClipWrapper.get_clip_saliency)
+get_clip_saliency_ = ClipWrapper.get_clip_saliency
 
 @app.command()
 def generate_heatmap(
@@ -56,23 +60,26 @@ def generate_heatmap(
         img_noise = np.uint8(img_noise) 
 
 
+        start = time.time()
+        grads_sentence, txt_emb = get_clip_saliency_(
+            img=img_noise,
+            text_labels=np.array(labels),
+            prompts=prompts,
+            **saliency_configs["ours"](h),
+        )
+            
+        print(time.time() - start, labels, grads_sentence.shape)
+
         ## Note: We found that going through labels one by one produces a lot more consistent heatmap
         ## when compared to passing the entire list of keywords.
         for idx, label_i in enumerate(labels):
-            grads, txt_emb = ClipWrapper.get_clip_saliency(
-                img=img_noise,
-                text_labels=np.array([label_i]),
-                prompts=prompts,
-                **saliency_configs["ours"](h),
-            )
-                
-            
+            grads = grads_sentence[idx]
             grads = grads.cpu().numpy()
             grads -= grads.mean()
             grad = np.clip((grads - vmin) / (vmax - vmin), a_min=0.0, a_max=1.0)
 
 
-            grad_img = Image.fromarray(np.uint8(grad[0]*255))
+            grad_img = Image.fromarray(np.uint8(grad*255))
             grad_img.save(os.path.join(save_folder,f"{label_i}_{i}.png"))
 
             masked_rgb = Image.fromarray(img_noise)
@@ -144,4 +151,4 @@ if __name__ == '__main__':
             start = time.time()
             generate_heatmap(img = img, labels = keywords, save_folder = save_folder, prompts=["a picture of a {}."] )
             
-            print(time.time() - start)
+            
