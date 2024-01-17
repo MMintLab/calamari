@@ -13,7 +13,7 @@ conda env create -f environment.yml
 git submodule add -f git@github.com:yswi/semantic-abstraction.git calamari/semantic_abstraction
 ```
 
-## 2. Install project
+## 2. Install Project
 ```
 pip install -e .
 ```
@@ -26,7 +26,7 @@ python script/train_temporal.py --gpu_id 0
 ```
 
 
-## (optionally) Train with Custom data. 
+## (optionally) Train with Custom Data. 
 Generate heatmap of the RLBench example.
 ```
  python script/dataprocessing/generate_heatmap.py --tas <TASK>
