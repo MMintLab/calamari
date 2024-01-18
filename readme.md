@@ -18,6 +18,8 @@ git submodule add -f git@github.com:yswi/semantic-abstraction.git calamari/seman
 pip install -e .
 ```
 
+## 3. Download Dataset
+
 
 ## 4. Train Policy
 ```

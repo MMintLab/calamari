@@ -27,8 +27,7 @@ from calamari.dataset_temporal_multi_fast import (
     DatasetTemporal as Dataset,
     augmentation,
 )
-import tensorflow as tf
-
+import wandb
 
 class ContactEnergy:
     def __init__(self, log_path, test_idx=(30, 37)):
@@ -36,8 +35,6 @@ class ContactEnergy:
         torch.manual_seed(self.Config.seed)
 
         self.activation = {}
-        ## Image Encoder
-        # self.image_encoder = image_encoder(self.Config.device, dim_in = 1 , dim_out = int(self.Config.dim_emb))
         self.image_encoder = torch.hub.load(
             "pytorch/vision:v0.10.0", "resnet18", pretrained=True
         )
@@ -72,7 +69,6 @@ class ContactEnergy:
             drop_last=False,
         )
 
-        # print("Train dataset size", self.train_dataset.__len__(), "Test dataset size", self.test_dataset.__len__())
 
         ## Define policy model
         dimout = self.train_dataset.cnt_w * self.train_dataset.cnt_h
@@ -84,7 +80,6 @@ class ContactEnergy:
             Config=self.Config,
             device=self.device,
         )
-        # self.policy = nn.DataParallel(self.policy.to(self.Config.device),device_ids=[0])
 
         ## Set optimizer
         self.test = False if test_idx is None else True
@@ -208,46 +203,45 @@ class ContactEnergy:
         # return contact patches, patches overlaid with RGB, normalized total loss
         return contact_histories, contact_histories_ovl, tot_loss
 
-    def get_energy_field(self):
-        for i in tqdm(range(self.start_epoch, self.Config.epoch)):
-            t = time.time()
-            if i % 20 == 0 or i == self.Config.epoch - 1:
-                self.save_model(i)
-            # print("model saved:", time.time()-t)
-            t = time.time()
+    def training(self):
+        with wandb.init() as run:
+            for i in tqdm(range(self.start_epoch, self.Config.epoch)):
+                t = time.time()
+                if i % 20 == 0 or i == self.Config.epoch - 1:
+                    self.save_model(i)
+                t = time.time()
 
-            self.policy.train(True)
-            if i % 20 == 0 or i == self.Config.epoch - 1:
-                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(
-                    self.train_dataLoader,
-                    write=True,
-                    N=np.amin([600, self.train_dataset.__len__()]),
-                    mode="train",
-                )
-                self.write_tensorboard(
-                    i, contact_histories, contact_histories_ovl, tot_loss
-                )
-            else:
-                _, _, tot_loss = self.feedforward(
-                    self.train_dataLoader,
-                    write=False,
-                    N=np.amin([60, self.train_dataset.__len__()]),
-                    mode="train",
-                )
-            # print("training loop:", time.time()-t)
-            tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
+                self.policy.train(True)
+                if i % 20 == 0 or i == self.Config.epoch - 1:
+                    contact_histories, contact_histories_ovl, tot_loss = self.feedforward(
+                        self.train_dataLoader,
+                        write=True,
+                        N=np.amin([600, self.train_dataset.__len__()]),
+                        mode="train",
+                    )
+                    self.write_train(
+                        run, i, contact_histories, contact_histories_ovl, tot_loss
+                    )
+                else:
+                    _, _, tot_loss = self.feedforward(
+                        self.train_dataLoader,
+                        write=False,
+                        N=np.amin([60, self.train_dataset.__len__()]),
+                        mode="train",
+                    )
 
-            if i % 20 == 0 or i == self.Config.epoch - 1:
-                self.policy.train(False)
-                contact_histories, contact_histories_ovl, tot_loss = self.feedforward(
-                    self.test_dataLoader,
-                    write=True,
-                    N=self.test_dataset.__len__(),
-                    mode="test",
-                )
-                self.write_tensorboard_test(
-                    i, contact_histories, contact_histories_ovl, tot_loss
-                )
+                tqdm.write("epoch: {}, loss: {}".format(i, tot_loss))
+                if i % 20 == 0 or i == self.Config.epoch - 1:
+                    self.policy.train(False)
+                    contact_histories, contact_histories_ovl, tot_loss = self.feedforward(
+                        self.test_dataLoader,
+                        write=True,
+                        N=self.test_dataset.__len__(),
+                        mode="test",
+                    )
+                    self.write_test(
+                        run, i, contact_histories, contact_histories_ovl, tot_loss
+                    )
 
     def save_model(self, epoch):
         if epoch % 100 == 0:
@@ -256,8 +250,8 @@ class ContactEnergy:
         else:
             path_model = self.logdir + "/policy.pth"
             path_optim = self.logdir + "/optim.pth"
-        # if not os.path.exists(path):
-        #     os.makedirs(path)
+
+
         torch.save(
             {
                 "epoch": epoch,
@@ -283,40 +277,32 @@ class ContactEnergy:
             else:
                 raise Exception("Error : the path exists")
 
-        # Creates a file writer for the log directory.
+        if not os.path.exists(self.logdir):
+            os.makedirs(self.logdir)
 
-        self.file_writer = tf.summary.create_file_writer(logdir)
-        self._save_script_log(logdir)
 
-    def _save_script_log(self, logdir):
-        # get the file directory.
-        filename = os.path.realpath(__file__).split("/")[-1]
-        save_script(f"script/{filename}", logdir)
-
-    def write_tensorboard_test(self, step, contact, contact_ovl, loss0):
+    def write_test(self, run, step, contact, contact_ovl, loss0):
         contact = torch.stack(contact).unsqueeze(3)
         contact_ovl = torch.stack(contact_ovl, dim=0)
 
-        with self.file_writer.as_default():
-            tf.summary.image(
-                "contact_test", contact, max_outputs=len(contact), step=step
-            )
-            tf.summary.image(
-                "contact_ovl_test", contact_ovl, max_outputs=len(contact_ovl), step=step
-            )
-            tf.summary.scalar(
-                "loss0_test", loss0 / self.test_dataLoader.__len__(), step=step
-            )
+        for i in range(contact.shape[0]):
+            run.log({f"contact_test_{i}": wandb.Image(contact[i].detach().cpu().numpy()), 
+                     f"contact_ovl_test_{i}": wandb.Image(contact_ovl[i].detach().cpu().numpy()),
+                     })
+        
+        run.log({"loss0_test" : loss0 / self.test_dataLoader.__len__()})
 
-    def write_tensorboard(self, step, contact, contact_ovl, loss):
+    def write_train(self, run, step, contact, contact_ovl, loss):
         contact = torch.stack(contact, dim=0).unsqueeze(3)
         contact_ovl = torch.stack(contact_ovl, dim=0)
-        with self.file_writer.as_default():
-            tf.summary.image("contact", contact, max_outputs=len(contact), step=step)
-            tf.summary.image(
-                "contact_ovl", contact_ovl, max_outputs=len(contact_ovl), step=step
-            )
-            tf.summary.scalar("loss0", loss / self.train_dataset.__len__(), step=step)
+
+        for i in range(contact.shape[0]):
+            run.log({f"contact_{i}": wandb.Image(contact[i].detach().cpu().numpy()), 
+                     f"contact_ovl_{i}": wandb.Image(contact_ovl[i].detach().cpu().numpy()),
+                     })
+        
+        run.log({"loss0" : loss / self.train_dataset.__len__()})
+
 
     def _initialize_loss(self, mode="p"):  # 'p' = partial, 'a' = all
         if mode == "a":
@@ -353,7 +339,6 @@ class ContactEnergy:
 
         return rgb
 
-
-CE = ContactEnergy(log_path=args.logdir)
-
-CE.get_energy_field()
+if __name__ == "__main__":
+    CE = ContactEnergy(log_path=args.logdir)
+    CE.training()
