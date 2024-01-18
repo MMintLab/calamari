@@ -19,12 +19,26 @@ pip install -e .
 ```
 
 ## 3. Download Dataset
+1. Download the dataset.zip from the link:
+https://www.dropbox.com/scl/fo/6w3p35agbu89ojp1mux5t/h?rlkey=0dxqegorjzo45tlzzy06y0w2z&dl=0
 
+2. Make 'dataset' folder and upzip the dataset.
 
-## 4. Train Policy
 ```
-# temporal transformer
-python script/train_temporal.py --gpu_id 0
+── calamari
+│   ├── calamari
+│   ├── dataset
+│   │   │── wipe
+│   │   │── sweep
+│   │   │── push
+│   ├── script
+...
+```
+
+
+## 4. Train Policy from Scratch
+```
+python script/train.py --task <TASK NAME> --logdir <FOLDER NAME> --gpu_id <GPU IDX>
 ```
 
 
