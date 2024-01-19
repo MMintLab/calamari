@@ -10,7 +10,7 @@ from calamari.modules_shared import *
 from calamari.temporal_transformer import TemporalTransformer, PrenormPixelLangEncoder
 import calamari.utils as utils
 from typing import Any, Callable, List, Optional, Type, Union
-from calamari.config.config_multi_conv import Config
+from calamari.cfg.config_multi_conv import Config
 from calamari.unet import UNet_Decoder
 
 
@@ -46,7 +46,6 @@ class policy(nn.Module):
         self.pos_enc = PositionalEncoding(Config.dim_emb, dropout=0.1, max_len=30).to(
             self.device
         )
-
         self.vl_transformer_encoder = PrenormPixelLangEncoder(
             num_layers=2,
             num_heads=2,

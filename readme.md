@@ -19,6 +19,8 @@ conda env create -f environment.yml
 We utilize heatmap extraction from Semantic Abstraction (Huy et al., CoRL 2022)."
 ```angular2html
 git submodule add -f git@github.com:yswi/semantic-abstraction.git calamari/semantic_abstraction
+git submodule add -b ros -f git@github.com:UM-ARM-Lab/pytorch_mppi.git calamari/pytorch_mppi
+
 ```
 
 ## 2. Install Project
@@ -57,5 +59,13 @@ Generate heatmaps of the custom data.
  python script/dataprocessing/generate_heatmap.py --task <TASK>
 ```
 
+## 5. Inference
+```commandline
+python script/plan/mpc.py --ttm_idx <task variation num> --cfg calamari/cfg/log.yaml -s 0 -v 2
+```
+
+
+
+
 ## Notes
-This repository trains the policy based on the RLbench dataset. RLbench code for inference and data collection will be released soon.
+This repository trains the policy based on the RLbench dataset.

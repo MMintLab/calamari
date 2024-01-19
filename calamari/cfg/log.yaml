@@ -1,0 +1,7 @@
+logdir: "/home/youngsun/Desktop/Research/l4c/calamari/script/model/push_final/policy_500.pth"
+model_type : "temporal_multi_conv"
+task: "push"
+seed: 100
+txt_idx: 0
+ttm_idx: 0 # 0: train ttm, 1~: held-out ttms
+heatmap_type: "huy"

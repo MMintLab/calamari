@@ -1,0 +1,8 @@
+logdir: "/home/youngsun/Desktop/Research/l4c/l4c_rlbench/script/model/temporal_0228/23443.pth"
+#logdir: "/home/youngsun/Desktop/Research/l4c/l4c_rlbench/script/model/temporal_0228/155414.pth"
+model_type : "temporal"
+task: "wipe"
+seed: 100
+txt_idx: 0
+ttm_idx: 0 # 0: train ttm, 1~: held-out ttms
+heatmap_type: "chefer"

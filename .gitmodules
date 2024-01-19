@@ -1,6 +1,7 @@
-[submodule "language4contact/semantic-abstraction"]
-	path = language4contact/semantic-abstraction
-	url = https://github.com/columbia-ai-robotics/semantic-abstraction.git
 [submodule "calamari/semantic_abstraction"]
 	path = calamari/semantic_abstraction
 	url = git@github.com:yswi/semantic-abstraction.git
+[submodule "calamari/pytorch_mppi"]
+	path = calamari/pytorch_mppi
+	url = git@github.com:UM-ARM-Lab/pytorch_mppi.git
+	branch = ros
