@@ -61,11 +61,73 @@ Generate heatmaps of the custom data.
 
 ## 5. Inference
 ```commandline
-python script/plan/mpc.py --ttm_idx <task variation num> --cfg calamari/cfg/log.yaml -s 0 -v 2
+python script/plan/mpc.py --ttm_idx <ttm idx> -v <task variation idx>  --cfg calamari/cfg/log.yaml -s 0 --logdir <log dir>
 ```
-
-
-
+Below are the combinations of parameters we used for the paper. You can find the inference code from 
+<table>
+    <thead>
+        <tr>
+            <th>task</th>
+            <th>object</th>
+            <th>ttm idx</th>
+            <th>task variation idx</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan=3>wipe</td>
+            <td>train obj</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td>test obj1</td>
+            <td>1</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td>test obj2</td>
+            <td>2</td>
+            <td>0</td>
+        </tr>
+    </tbody>
+    <tbody>
+        <tr>
+            <td rowspan=3>sweep</td>
+            <td>train obj</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td>test obj1</td>
+            <td>1</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td>test obj2</td>
+            <td>2</td>
+            <td>0</td>
+        </tr>
+    </tbody>
+    <tbody>
+        <tr>
+            <td rowspan=3>push</td>
+            <td>train obj</td>
+            <td>0</td>
+            <td>0</td>
+        </tr>
+        <tr>
+            <td>test obj1</td>
+            <td>0</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td>test obj2</td>
+            <td>0</td>
+            <td>2</td>
+        </tr>
+    </tbody>
+</table>
 
 ## Notes
 This repository trains the policy based on the RLbench dataset.

@@ -11,14 +11,6 @@ class TaskMPCConfig(TaskConfig):
         super().__init__()
         self.mpc_seed = 100
         self.task_mpc_configs = {
-            'draw': {
-                'txt_cmd': self.language_prompts['wipe'],
-                'tasks': [DrawNewNew],  # Call by the index
-                'tool_name': self.task_policy_configs['wipe']['tool_name'],
-                'target_name': self.task_policy_configs['wipe']['target_name'],
-                'grasp_target_name': self.task_policy_configs['wipe']['grasp_target_name'],
-                'demo_controller': EndEffectorPoseViaPlanning(),
-            },
             'wipe' : {
                 'txt_cmd': self.language_prompts['wipe'],
                 'tasks': [WipeDesk, WipeDeskWb, WipeDeskHd, WipeDeskHd2],  # Call by the index
@@ -42,14 +34,6 @@ class TaskMPCConfig(TaskConfig):
                 'target_name': self.task_policy_configs['sweep']['target_name'],
                 'grasp_target_name': self.task_policy_configs['sweep']['grasp_target_name'],
                 'demo_controller': JointVelocity(),
-            },
-            'scoop': {
-                'txt_cmd': self.language_prompts['scoop'],
-                'tasks': [ScoopWithSpatula],  # Call by the index
-                'tool_name': self.task_policy_configs['scoop']['tool_name'],
-                'target_name': self.task_policy_configs['scoop']['target_name'],
-                'grasp_target_name': self.task_policy_configs['scoop']['grasp_target_name'],
-                'demo_controller': EndEffectorPoseViaPlanning(),
             },
             'push': {
                 'txt_cmd': self.task_policy_configs['push']['txt_cmd'],

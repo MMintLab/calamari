@@ -13,3 +13,4 @@ calamari.egg-info/
 /__pycache__/
 calamari/Transformer_MM_Explainability
 *.pyc
+**/*/out/

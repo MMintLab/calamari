@@ -190,7 +190,7 @@ class PretrainedPolicy:
         contact_goal["contact_ovl"] = contact_ovl #.numpy()
 
     # cv2.imwrite("contact_ori.png", contact[0].detach().cpu().numpy() * 255.0)
-        cv2.imwrite(f"contact_{time.time()}.png", contact_ovl[...,[2, 1, 0]])
+        cv2.imwrite(f"contact.png", contact_ovl[...,[2, 1, 0]])
         # breakpoint()
         return contact_goal
     # breakpoint()
