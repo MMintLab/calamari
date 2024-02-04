@@ -20,7 +20,7 @@ from calamari.data_processing.utils import pixels_within_convexhull
 logger = logging.getLogger(__name__)
 cfg = MppiConfig()
 
-def records2obs(records, model_type):
+def records2obs(records):
     obs_list = records[- min([4, len(records)]):]
     # if model_type == 'temporal':
     #     obs_list = records[- min([4, len(records)]) :]
@@ -31,13 +31,12 @@ def records2obs(records, model_type):
 
 
 class Controller(object):
-    def __init__(self, env,  policy = None, dynamics = None, policy_mode = 'm3'):
+    def __init__(self, env,  policy = None, dynamics = None):
         self.device = 'cuda:0'
         self.env = env
         self.task = env._prev_task
         self.policy = policy if policy is not None else policy
         self.dynamics = dynamics
-        self.policy_mode = policy_mode
         self.ctrl = mppi.MPPI(self.dynamics.rigid_dynamics, self.running_cost,
                               cfg.nx, cfg.noise_sigma,
                               noise_mu = cfg.noise_mu,
@@ -114,32 +113,6 @@ class Controller(object):
         :return: N x 7 tool pose array: x,y,z, qx,qy,qz,qw
         '''
 
-        # Get next tool pose.
-        # print("start controller")
-        # state = state.detach().cpu()  # .numpy()
-        # action = action.detach().cpu()
-        # print(action)
-
-        # y
-
-        # try:
-        #     print(np.amax(action, axis = 0))
-        # except:
-        #     print(torch.amax(action, dim = 0))
-        # action = torch.zeros_like(action)
-        # print(action)
-        # breakpoint()
-
-        # plot action distribution
-        # plt.hist(action[:, -2], bins=100)
-        # plt.show()
-
-        # plt.hist(action[:, -1], bins=100)
-        # plt.show()
-        # breakpoint()
-
-
-        # next_pose = get_next_pose(cur_pose=state, action=action, return_euler=True)  # x,y,z, w,x,y,z
         next_pose = copy.copy(state)
         B = state.shape[0]
 
@@ -149,26 +122,12 @@ class Controller(object):
             tool_pcd = utils.transform_mesh(self.tool_pcd, next_pose, self.device, from_euler = True)
             tool_pcd = tool_pcd.detach().cpu()
 
-            # fig = plt.figure()
-            # ax = fig.add_subplot(111, projection='3d')
-            # ax.scatter3D(tool_pcd[0, :, 0],
-            #              tool_pcd[0, :, 1],
-            #              tool_pcd[0, :, 2], c='green', s=0.002)
-            #
-            # X = self.dynamics.init_obs.front_point_cloud[..., 0].reshape(-1)
-            # Y = self.dynamics.init_obs.front_point_cloud[..., 1].reshape(-1)
-            # Z = self.dynamics.init_obs.front_point_cloud[..., 2].reshape(-1)
-            # ax.scatter3D(X, Y, Z, c='black', s=0.002)
-            # plt.show()
-
             front_pxls = self.policy.Config.pcd_to_camera(cnt_pts=tool_pcd) # tool pixels
 
             # Pointcloud size = B x N x 3
             if len(tool_pcd.shape) == 2:
                 pcd = tool_pcd.unsqueeze(0)  # [np.newaxis, :, :]
             assert len(tool_pcd.shape) == 3
-
-            # detect contact using z offset
 
             # step 1- extract the bottom 1cm of the tool pcd
             bottom_thres = torch.amin(tool_pcd[..., 2], dim = 1) + 0.01
@@ -199,35 +158,15 @@ class Controller(object):
                 bottom_obj_2d_depth[b, front_pxls[b, iidx, 0], front_pxls[b, iidx, 1]] = tool_pcd[b, iidx,2]  # .to(self.device).float()
                 if b == 0:
                     pass
-                    # print("expected pcd", len(iidx))
 
-                # Center of contact patch
                 center_est.append(tool_pcd[b, iidx, :].mean(axis=0).tolist())
             center_est = torch.tensor(center_est)
 
-            # print("tool pcd", tool_pcd[b, iidx, 2])
-            # print("front depth", self.dynamics.init_obs.front_point_cloud)
-            # breakpoint()
+
             bottom_env_2d_depth = bottom_obj_2d_mask * self.dynamics.init_obs.front_point_cloud[np.newaxis, ..., 2]
-            # print(bottom_env_2d_depth.shape, self.dynamics.init_obs.front_point_cloud.shape)
 
-
-            # fig = plt.figure()
-            # ax = fig.add_subplot(111, projection='3d')
-            # ax.scatter3D(bottom_env_2d_depth[0][...,0],
-            #              self.dynamics.init_obs.front_point_cloud,
-            #              bottom_env_2d_depth[0].reshape(-1), c = 'black', s=0.002)
-            # plt.show()
-
-
-            # bottom_env_2d_depth = self.dynamics.init_obs.front_point_cloud[np.newaxis, ..., 2]
-
-
-            # non_contact_mask = np.where(bottom_obj_2d_depth > bottom_env_2d_depth ,
-            #                            np.ones_like(bottom_obj_2d_depth),
-            #                            np.zeros_like(bottom_obj_2d_depth))
-            # print( np.amin( bottom_obj_2d_depth - bottom_env_2d_depth))
-            contact_mask = np.where(bottom_obj_2d_depth < bottom_env_2d_depth ,
+            cnt_eps = 0.005
+            contact_mask = np.where(bottom_obj_2d_depth <= bottom_env_2d_depth + cnt_eps,
                                        np.ones_like(bottom_obj_2d_depth),
                                        np.zeros_like(bottom_obj_2d_depth))
             contact_mask = bottom_obj_2d_mask * contact_mask
@@ -237,41 +176,16 @@ class Controller(object):
             cost_dist[torch.isnan(cost_dist)] = 1.
             cost_dist = cost_dist.cpu().numpy()
 
-            # non-penetration cost.
-            thres_p = 0.008  # penetration threshold
-            # print(np.amax(bottom_env_2d_depth - bottom_obj_2d_depth, axis=(-2,-1)),
-            #       np.amin(bottom_env_2d_depth - bottom_obj_2d_depth, axis=(-2,-1) ))
-
 
             contact_loss = np.where ( np.amin( bottom_obj_2d_depth - bottom_env_2d_depth , axis=(-2,-1)) < 0.,
                         np.zeros_like(cost_dist), np.ones_like(cost_dist))
 
+            # non-penetration cost.
+            thres_p = 0.01  # penetration threshold
             non_pene_loss = np.where ( np.amax(bottom_env_2d_depth - bottom_obj_2d_depth, axis=(-2,-1)) > thres_p,
                         np.ones_like(cost_dist), np.zeros_like(cost_dist))
-            # print("pene loss", np.amax(np.amax(bottom_env_2d_depth - bottom_obj_2d_depth, axis=(-2,-1))))
 
 
-            # # # 3d scatter plot with red color
-            # # X,Y = np.meshgrid(range(bottom_obj_2d_depth.shape[1]), range(bottom_obj_2d_depth.shape[2])[::-1])
-            # X = self.dynamics.init_obs.front_point_cloud[ ..., 0].reshape(-1)
-            # Y = self.dynamics.init_obs.front_point_cloud[ ..., 1].reshape(-1)
-            # Z = bottom_env_2d_depth[0].reshape(-1)
-
-
-            # fig = plt.figure()
-            # ax = fig.add_subplot(111, projection='3d')
-            # ax.scatter3D(X, Y, Z, c = 'black', s=0.002)
-            # # ax.scatter3D(X, Y, bottom_env_2d_depth[0].reshape(-1), c='green', s=0.002)
-            # ax.scatter3D(X, Y, bottom_obj_2d_depth[0, ...].reshape(-1), c='red', s=0.003)
-            # # ax.scatter3D(X, Y, bottom_obj_2d_depth[0].reshape(-1), c='r', s=0.002)
-            # # ax.scatter3D(X, Y, bottom_env_2d_depth[0].reshape(-1), c = 'black', s=0.002)
-            # plt.show()
-
-
-
-            # print(center_est, self.dynamics.contact_goal_center)
-            # print("cost_dist", contact_pcd_padded.shape, center_est.shape, cost_dist.shape) # Size([100, 40, 3]) torch.Size([100, 3]) (100,)
-            # print("time: cost_dist", time.time() - st)
 
             contact_mask_offset = np.zeros_like(contact_mask)
             # (self.cnt_img[:, :, 0]
@@ -284,78 +198,31 @@ class Controller(object):
                     jidx = np.clip(jidx - int(np.mean(jidx)) + int(np.mean(cnt_jidx)), 0, contact_mask.shape[1] -1)
                     contact_mask_offset[bidx, iidx, jidx] = np.ones_like(iidx)
 
+            contact_loss = np.where(np.sum(contact_mask_offset, axis = (-2, -1)) > 0,
+                                    np.zeros_like(contact_mask_offset[:,0,0]),
+                                    2*np.ones_like(contact_mask_offset[:,0,0]))
+
+
             # ## Cost 2: IoU
             st = time.time()
 
-            # Add when distance is sufficiently small
-            # if np.amin(cost_dist) > 0.03:
-            #     iou = np.zeros_like(cost_dist)
-            #     cost_dist = cost_dist*10
-            # else:
+
             iou = utils.IoU(np.tile(self.cnt_img[:, :, 0][np.newaxis, :, :] // 255, (B, 1, 1)), contact_mask_offset,
                             self.device)
-            # iou = utils.IoU( np.tile(self.cnt_img[:,:,0][np.newaxis,:,:]//255, (B,1,1)), contact_mask, self.device)
             iou = np.clip(np.ones_like(iou) - iou, 0, 1) * 0.3 #0.05
 
-            # non_pene_loss= np.where( np.sum(non_pene_mask, axis = (1,2)) > 0, np.ones_like(cost_dist), np.zeros_like(cost_dist))
 
             # Cost
             st = time.time()
             norm = np.linalg.norm(action[:,:3], axis = -1)  #+ np.linalg.norm(action[:,3:], axis = -1) * 0.01
             cost =  cost_dist +  iou+ non_pene_loss + contact_loss + norm  #* 10 #+ pene_loss #+ contact_loss
-            cost_idx = np.argsort(cost)[:5]
-            # breakpoint()
-            # 5 smallest cost values
-
-
-
-            # cost =  cost_dist + non_pene_loss + contact_loss + 0.15 #* 10 #+ pene_loss #+ contact_loss
-
-            # cost =  cost_dist + (np.ones_like(iou) - iou) * 0.2 #+ non_pene_loss #+ contact_loss* 10 #+ pene_loss #+ contact_loss
-            cost = cost [ np.newaxis, :] # TODO : why the output shape 1x 1x N ?
             idx = np.argmin(cost)
-            print("cost", np.min(cost), cost_dist[idx] , iou[idx], non_pene_loss[idx] , contact_loss[idx] , norm[idx] )
 
 
+            cost = cost [ np.newaxis, :] # TODO : why the output shape 1x 1x N ?
             cv2.imwrite(f"iou_test.png", (contact_mask_offset[idx]*0.2 + self.cnt_img[:,:,0][:,:]//255 * 0.8)*255)
 
-            # pt = self.dynamics.contact_goal_center
-            # print(pt)
-            # spot = Shape.create(type=PrimitiveShape.CUBOID,
-            #                     size=[.05, .05, .05],
-            #                     mass=0, static=True, respondable=False,
-            #                     renderable=False,
-            #                     color=[1., 0., 0.])
-            # spot.set_parent(self.task.get_base())
-            # spot.set_position([pt[0], pt[1], pt[2]])
-            #
-            # # print("time: cost", time.time() - st)
-            # pt = center_est[np.argmin(cost_dist)]
-            # spot = Shape.create(type=PrimitiveShape.CUBOID,
-            #                     size=[.05, .05, .05],
-            #                     mass=0, static=True, respondable=False,
-            #                     renderable=False,
-            #                     color=[0., 0., 1.])
-            # spot.set_parent(self.task.get_base())
-            # spot.set_position([pt[0], pt[1], pt[2]])
-            #
-            # print( "max_pene", np.amax( bottom_env_2d_depth[idx] - bottom_obj_2d_depth[idx] ) )
-            # union_ = self.cnt_img[:,:,0] + bottom_obj_2d_mask[idx,:,:]*255
-            # plt.imsave('iou_debuc.png', union_/2)
 
-            # plt.imsave('iou_debuc.png',np.concatenate([self.cnt_img[:,:,0] ,dyn_contact_img_final[idx,:,:]*255], axis = 0) )
-
-
-            # iidx, jidx = np.where(dyn_contact_img[idx, :, :] == 1.)
-
-            # dyn_target = utils.get_cntpts_from_mask( tool_pcd[idx], contact_binary_mask[idx])
-            # st = time.time()
-            # self.visualize_next_step(dyn_target) # check if tool transform is correct
-
-            # print("dyn contact img", tool_pcd[idx].shape)
-            # iidx, _ = np.where(bottom_binary[idx, :, :] == np.ones_like(bottom_binary[idx, :, :]))
-            # self.visualize_next_step(tool_pcd[idx, iidx]) # check if tool transform is correct
-            # print("time: visualize", time.time() - st)
         else:
             # Free space cost
             cost = torch.norm(
@@ -367,7 +234,7 @@ class Controller(object):
 
 
 
-    def generate_next_goal(self, obss_, l: str,  mode = 'hard', model_type = 'temporal') -> None:
+    def generate_next_goal(self, obss_, l: str,  mode = 'hard') -> None:
         '''
         If self.cnt_img_raw is empty, draw contact goal via generate_contact_goal.
         if not empty, use use next seq
@@ -375,7 +242,7 @@ class Controller(object):
 
         # draw new contact goal
         if len(self.cnt_img_raw) == 0:
-            obss = records2obs(obss_, model_type)
+            obss = records2obs(obss_)
             self.generate_new_goal(obss, l,  mode)
 
         # use next seq

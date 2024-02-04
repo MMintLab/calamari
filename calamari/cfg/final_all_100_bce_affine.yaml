@@ -1,7 +1,0 @@
-logdir: "/home/youngsun/Desktop/Research/l4c/l4c_rlbench/script/model/final_all_100_bce_affine/policy_push.pth"
-model_type : "temporal_multi_conv"
-task: "wipe"
-seed: 100
-txt_idx: 0
-ttm_idx: 0 # 0: train ttm, 1~: held-out ttms
-heatmap_type: "huy"

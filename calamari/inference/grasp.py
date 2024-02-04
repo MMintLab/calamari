@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from transforms3d.quaternions import axangle2quat, qmult
 from transforms3d.euler import euler2quat
-from l4c_rlbench.rlbench.environment import Environment
+from rlbench.environment import Environment
 from calamari.inference.utils.utils import transform_mesh
 from rlbench.backend.task import Task
 def grasp_pcd(env: Environment, task):

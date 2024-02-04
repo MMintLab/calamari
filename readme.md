@@ -28,40 +28,41 @@ git submodule add -b ros -f git@github.com:UM-ARM-Lab/pytorch_mppi.git calamari/
 pip install -e .
 ```
 
-## 3. Download Dataset
-1. Download the dataset.zip from the link:
-https://www.dropbox.com/scl/fo/6w3p35agbu89ojp1mux5t/h?rlkey=0dxqegorjzo45tlzzy06y0w2z&dl=0
+## 3. Download Dataset & Pretrained
+1. Download the dataset.zip from the [link](https://www.dropbox.com/scl/fo/6w3p35agbu89ojp1mux5t/h?rlkey=0dxqegorjzo45tlzzy06y0w2z&dl=0
+). Unzip the folder under ``dataset/`` folder.
 
-2. Make 'dataset' folder and upzip the dataset.
+2. Download the pretrained .pth from the [link](https://www.dropbox.com/scl/fo/h53s8s108959q30vjmecb/h?rlkey=ubdmt9yumle313g4owjra1epe&dl=0
+). Put them under ``script/model/`` folder.
+
+3. As a result, the directory should be
 
 ```
 ── calamari
 │   ├── calamari
 │   ├── dataset
-│   │   │── wipe
-│   │   │── sweep
-│   │   │── push
+│   │   │── wipe_desk
+│   │   │── sweep_to_dustpan
+│   │   │── push_buttons
+│   │   │── ...
 │   ├── script
+│   ├── ├── model
 ...
 ```
 
 
-## 4. Train Policy from Scratch
+## 4. (optionally) Train Policy from Scratch
+
 ```
 python script/train.py --task <TASK NAME> --logdir <FOLDER NAME> --gpu_id <GPU IDX>
 ```
 Note: We use A6000 (48G) for training. You can decrease the batch size in config_multi_conv.py to match your GPU capacity, but a performance drop should be expected.
 
 
-## (optionally) Train with Custom Data. 
-Generate heatmaps of the custom data.
-```
- python script/dataprocessing/generate_heatmap.py --task <TASK>
-```
 
 ## 5. Inference
 ```commandline
-python script/plan/mpc.py --ttm_idx <ttm idx> -v <task variation idx>  --cfg calamari/cfg/log.yaml -s 0 --logdir <log dir>
+python script/plan/mpc.py --task <task name> --txt_idx <txt idx> --ttm_idx <ttm idx> -v <task variation idx>  -s 0 --logdir <log dir>
 ```
 Below are the combinations of parameters we used for the paper. You can find the inference code from 
 <table>
@@ -129,5 +130,12 @@ Below are the combinations of parameters we used for the paper. You can find the
     </tbody>
 </table>
 
+## (optionally) Train with Custom Data. 
+Generate heatmaps of the custom data.
+```
+ python script/dataprocessing/generate_heatmap.py --task <TASK>
+```
+
 ## Notes
 This repository trains the policy based on the RLbench dataset.
+Please reach out to the author yswi@umich.edu for further questions.

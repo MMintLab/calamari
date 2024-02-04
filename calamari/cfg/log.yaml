@@ -1,5 +1,5 @@
-logdir: "/home/youngsun/Desktop/Research/l4c/calamari/script/model/push_final/policy_500.pth"
-model_type : "temporal_multi_conv"
+#logdir: "/home/youngsun/Desktop/Research/l4c/calamari/script/model/push_final/policy_500.pth"
+logdir: "/home/youngsun/Desktop/Research/l4c/calamari/script/model/sweep_final/policy_300.pth"
 task: "push"
 seed: 100
 txt_idx: 0
