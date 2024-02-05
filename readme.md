@@ -61,6 +61,15 @@ Note: We use A6000 (48G) for training. You can decrease the batch size in config
 
 
 ## 5. Inference
+Inference requires installation of CoppeliaSim, PyRep, and RLBench. To do so, clone RLbench repo to your project directory as
+```commandline
+git clone git@github.com:MMintLab/rlbench.git
+cd RLbench
+```
+and follow the instructions for PyREP and CoppeliaSim setup. 
+
+
+
 ```commandline
 python script/plan/mpc.py --task <task name> --txt_idx <txt idx> --ttm_idx <ttm idx> -v <task variation idx>  -s 0 --logdir <log dir>
 ```
