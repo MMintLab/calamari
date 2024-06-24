@@ -29,7 +29,7 @@ from calamari.dataset_temporal_multi_fast import (
 )
 import wandb
 
-class ContactEnergy:
+class ContactPolicy:
     def __init__(self, log_path, test_idx=(30, 37)):
         self.Config = Config(args.task)
         torch.manual_seed(self.Config.seed)
@@ -340,5 +340,5 @@ class ContactEnergy:
         return rgb
 
 if __name__ == "__main__":
-    CE = ContactEnergy(log_path=args.logdir)
+    CE = ContactPolicy(log_path=args.logdir)
     CE.training()
