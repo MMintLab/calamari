@@ -7,7 +7,7 @@
 This is a github repository of a [CALAMARI: Contact-Aware and Language conditioned spatial Action MApping for contact-RIch manipulation](https://proceedings.mlr.press/v229/wi23a.html) (CoRL 2023).
 
 
-We trained with the GPU A6000 and ran inference on the RTX 3080 and RTX 2070.
+We trained with a GPU A6000 and ran inference on a RTX 3080 and RTX 2070.
 
 ## 1. install project and Dependencies
 ```angular2html
@@ -48,7 +48,7 @@ https://www.dropbox.com/scl/fo/6w3p35agbu89ojp1mux5t/h?rlkey=0dxqegorjzo45tlzzy0
 ```
 python script/train.py --task <TASK NAME> --logdir <FOLDER NAME> --gpu_id <GPU IDX>
 ```
-Note: We use A6000 (48G) for training. You can decrease the batch size in config_multi_conv.py to match your GPU capacity, but a performance drop should be expected.
+Note: We use A6000 (48G) for training. You can decrease the batch size in config_multi_conv.py to match your GPU capacity.
 
 
 ## (optionally) Train with Custom Data. 
